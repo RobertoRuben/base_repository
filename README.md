@@ -221,13 +221,13 @@ The `@query` decorator is used to execute native SQL queries, automatically mapp
 from base_repository.decorator.query import query
 
 class  UserRepository:
-	@query("SELECT * FROM users WHERE status = :status")
-	def get_users_by_status(self,  session: Session,  status:  str):
-		pass
+    @query("SELECT * FROM users WHERE status = :status")
+    def get_users_by_status(self,  session: Session,  status:  str):
+        pass
 
-	@query("SELECT COUNT(*) FROM users WHERE department = :department",  scalar=True)
-	def count_users(self,  session: Session,  department:  str)  ->  int:
-		pass
+    @query("SELECT COUNT(*) FROM users WHERE department = :department",  scalar=True)
+    def count_users(self,  session: Session,  department:  str)  ->  int:
+        pass
 ```
 
 #### Usage
