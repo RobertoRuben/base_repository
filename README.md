@@ -36,7 +36,7 @@ from base_repository.decorator.repository import repository
 
 @repository
 class UserRepository(BaseRepository[User]):
-	pass
+      pass
 ```
 
 ### Use Repository ⚙️
@@ -76,7 +76,7 @@ from base_repository.decorator.transactional import transactional
 
 @transactional
 def create_user(session: Session,  user: User)  -> User:
-	return repo.save(session, user)
+    return repo.save(session, user)
 ```
 
 #### Configuration
@@ -89,9 +89,9 @@ def create_user(session: Session,  user: User)  -> User:
 ```python
 @transactional(auto_concurrent=True,  read_only=False)
 def update_user(session: Session,  user_id:  int,  new_name:  str)  -> User:
-	user = repo.get_by_id(session, user_id)
-	user.name = new_name
-	return repo.save(session, user)
+    user = repo.get_by_id(session, user_id)
+    user.name = new_name
+    return repo.save(session, user)
 ```
 
 #### Read-Only Operations
@@ -118,10 +118,10 @@ from base_repository.exception.decorator_exception import TransactionError
 
 @transactional
 def delete_user(session: Session,  user_id:  int):
-	try:
-		repo.delete(session, user_id)
-	except TransactionError as e:
-		print(f"Transaction failed: {str(e)}")
+    try:
+        repo.delete(session, user_id)
+    except TransactionError as e:
+        print(f"Transaction failed: {str(e)}")
 ```
 
 
