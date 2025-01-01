@@ -6,7 +6,7 @@ from typing import Optional
 from datetime import datetime
 from src.exception.base_repository_exception import EntityNotFoundError
 
-# Definición del modelo de entidad
+# Entity model definition
 class Product(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     name: str
@@ -14,138 +14,138 @@ class Product(SQLModel, table=True):
     description: Optional[str] = None
     stock: int = Field(default=0)
 
-# Repositorio con decorador @repository
+# Repository with @repository decorator
 @repository
 class ProductRepository(BaseRepository[Product]):
-    """Repositorio para operaciones CRUD de productos."""
+    """Repository for CRUD operations on products."""
 
     def find_by_price_range(self, session: Session, min_price: float, max_price: float):
-        """Método personalizado para buscar productos por rango de precio."""
+        """Custom method to find products within a price range."""
         statement = select(self.model_class).where(
             self.model_class.price >= min_price,
             self.model_class.price <= max_price
         )
         return session.exec(statement).all()
 
-# Fixtures para la base de datos y sesiones
+# Fixtures for database and sessions
 @pytest.fixture(name="engine")
 def fixture_engine():
-    """Configura el motor de base de datos SQLite en memoria para pruebas."""
+    """Configures an in-memory SQLite database engine for testing."""
     engine = create_engine("sqlite:///:memory:", echo=True)
     SQLModel.metadata.create_all(engine)
     yield engine
-    SQLModel.metadata.drop_all(engine)  # Limpia la base de datos después de las pruebas
+    SQLModel.metadata.drop_all(engine)  # Cleans up the database after tests
 
 @pytest.fixture(name="session")
 def fixture_session(engine):
-    """Crea una sesión para la base de datos en memoria."""
+    """Creates a session for the in-memory database."""
     with Session(engine) as session:
         yield session
 
 @pytest.fixture
 def product_repo():
-    """Crea una instancia del repositorio ProductRepository."""
+    """Creates an instance of the ProductRepository."""
     return ProductRepository()
 
-# Test para crear un producto
+# Test to create a product
 def test_create_product(session: Session, product_repo: ProductRepository):
-    """🛠️ Prueba la creación de un producto en la base de datos."""
-    new_product = Product(name="Laptop", price=999.99, description="Potente laptop", stock=10)
+    """🛠️ Test product creation in the database."""
+    new_product = Product(name="Laptop", price=999.99, description="Powerful laptop", stock=10)
     product_repo.save(session, new_product)
     session.commit()
     
-    # Verificar que el producto ha sido creado
+    # Verify the product has been created
     product = product_repo.get_by_id(session, new_product.id)
-    print("📦 Producto creado:", product.name)
-    assert product is not None, "El producto no debería ser nulo"
+    print("📦 Product created:", product.name)
+    assert product is not None, "The product should not be null"
     assert product.name == "Laptop"
     assert product.price == 999.99
     assert product.stock == 10
-    print("✅ Producto validado con éxito.")
+    print("✅ Product validated successfully.")
 
-# Test para obtener todos los productos
+# Test to get all products
 def test_get_all_products(session: Session, product_repo: ProductRepository):
-    """🗃️ Prueba la obtención de todos los productos."""
-    product1 = Product(name="Laptop", price=999.99, description="Potente laptop", stock=10)
-    product2 = Product(name="Phone", price=499.99, description="Teléfono inteligente", stock=5)
+    """🗃️ Test retrieving all products."""
+    product1 = Product(name="Laptop", price=999.99, description="Powerful laptop", stock=10)
+    product2 = Product(name="Phone", price=499.99, description="Smartphone", stock=5)
     
     product_repo.save(session, product1)
     product_repo.save(session, product2)
     session.commit()
     
     products = product_repo.get_all(session)
-    print("📱 Productos obtenidos:", [p.name for p in products])
-    assert len(products) == 2, "Deberían existir 2 productos"
+    print("📱 Products retrieved:", [p.name for p in products])
+    assert len(products) == 2, "There should be 2 products"
     assert products[0].name == "Laptop"
     assert products[1].name == "Phone"
-    print("✅ Todos los productos obtenidos correctamente.")
+    print("✅ All products retrieved successfully.")
 
-# Test para obtener producto por ID
+# Test to get product by ID
 def test_get_product_by_id(session: Session, product_repo: ProductRepository):
-    """🔍 Prueba la obtención de un producto por su ID."""
-    new_product = Product(name="Tablet", price=299.99, description="Tablet económica", stock=7)
+    """🔍 Test retrieving a product by its ID."""
+    new_product = Product(name="Tablet", price=299.99, description="Budget tablet", stock=7)
     product_repo.save(session, new_product)
     session.commit()
     
     product = product_repo.get_by_id(session, new_product.id)
-    print("🔍 Producto obtenido por ID:", product.name)
-    assert product is not None, "El producto no debería ser nulo"
+    print("🔍 Product retrieved by ID:", product.name)
+    assert product is not None, "The product should not be null"
     assert product.id == new_product.id
     assert product.name == "Tablet"
-    print("✅ Producto por ID validado correctamente.")
+    print("✅ Product by ID validated successfully.")
 
-# Test para actualizar un producto
+# Test to update a product
 def test_update_product(session: Session, product_repo: ProductRepository):
-    """✏️ Prueba la actualización de un producto."""
-    product = Product(name="Smartwatch", price=199.99, description="Reloj inteligente", stock=15)
+    """✏️ Test updating a product."""
+    product = Product(name="Smartwatch", price=199.99, description="Smartwatch", stock=15)
     product_repo.save(session, product)
     session.commit()
     
-    # Actualizar el producto
+    # Update the product
     product.price = 179.99
     updated_product = product_repo.update(session, product.id, product)
     session.commit()
     
-    # Verificar que el precio ha sido actualizado
+    # Verify the price has been updated
     product_in_db = product_repo.get_by_id(session, product.id)
-    print("✏️ Producto actualizado:", product_in_db.name, "Nuevo precio:", product_in_db.price)
-    assert product_in_db.price == 179.99, "El precio no coincide con el valor actualizado"
-    print("✅ Producto actualizado correctamente.")
+    print("✏️ Product updated:", product_in_db.name, "New price:", product_in_db.price)
+    assert product_in_db.price == 179.99, "The price doesn't match the updated value"
+    print("✅ Product updated successfully.")
 
-# Test para eliminar un producto
+# Test to delete a product
 def test_delete_product(session: Session, product_repo: ProductRepository):
-    """❌ Prueba la eliminación de un producto."""
-    product = Product(name="Headphones", price=89.99, description="Auriculares Bluetooth", stock=20)
+    """❌ Test deleting a product."""
+    product = Product(name="Headphones", price=89.99, description="Bluetooth headphones", stock=20)
     product_repo.save(session, product)
     session.commit()
     
-    # Eliminar el producto
+    # Delete the product
     product_repo.delete(session, product.id)
     session.commit()
     
-    # Verificar que intentar obtener el producto lanza la excepción esperada
+    # Verify that trying to retrieve the product throws the expected exception
     with pytest.raises(EntityNotFoundError) as exc_info:
         product_repo.get_by_id(session, product.id)
     
-    # Verificar detalles de la excepción
+    # Verify exception details
     assert str(exc_info.value) == f"Entity not found with ID: {product.id}"
-    print("❌ Producto eliminado correctamente y no encontrado:", product.name)
+    print("❌ Product deleted successfully and not found:", product.name)
 
-# Test para el método personalizado de búsqueda por rango de precio
+# Test for the custom method to find products by price range
 def test_find_by_price_range(session: Session, product_repo: ProductRepository):
-    """🔍 Prueba la búsqueda de productos por rango de precio."""
-    product1 = Product(name="Smartphone", price=799.99, description="Smartphone de gama alta", stock=10)
-    product2 = Product(name="Smartwatch", price=199.99, description="Smartwatch económico", stock=15)
-    product3 = Product(name="Laptop", price=999.99, description="Laptop potente", stock=5)
+    """🔍 Test finding products by price range."""
+    product1 = Product(name="Smartphone", price=799.99, description="High-end smartphone", stock=10)
+    product2 = Product(name="Smartwatch", price=199.99, description="Budget smartwatch", stock=15)
+    product3 = Product(name="Laptop", price=999.99, description="Powerful laptop", stock=5)
     product_repo.save(session, product1)
     product_repo.save(session, product2)
     product_repo.save(session, product3)
     session.commit()
     
-    # Buscar productos entre 199 y 800 (inclusive)
+    # Find products between 199 and 800 (inclusive)
     products_in_range = product_repo.find_by_price_range(session, 199, 800)
-    print("🔍 Productos en rango de precio:", [p.name for p in products_in_range])
-    assert len(products_in_range) == 2, "Deberían encontrarse 2 productos en el rango"
+    print("🔍 Products in price range:", [p.name for p in products_in_range])
+    assert len(products_in_range) == 2, "There should be 2 products in the range"
     assert products_in_range[0].name == "Smartphone"
     assert products_in_range[1].name == "Smartwatch"
-    print("✅ Búsqueda por rango de precio completada.")
+    print("✅ Price range search completed.")

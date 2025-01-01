@@ -4,7 +4,7 @@ from src.decorator.query import query
 from src.decorator.transactional import transactional
 from typing import Dict, Any, List
 
-# Definición de modelo para la tabla de prueba
+# Model definition for the test table
 class TestUser(SQLModel, table=True):
     __tablename__ = "test_users"
     id: int | None = Field(default=None, primary_key=True)
@@ -13,7 +13,7 @@ class TestUser(SQLModel, table=True):
 # Fixtures
 @pytest.fixture(name="engine")
 def fixture_engine():
-    """Configura el motor de base de datos para PostgreSQL."""
+    """Configures the database engine for PostgreSQL."""
     DATABASE_URL = "postgresql+psycopg2://postgres:oracle@localhost:5432/sqlmodel_db"
     engine = create_engine(DATABASE_URL, echo=False)
     yield engine
@@ -21,21 +21,21 @@ def fixture_engine():
 
 @pytest.fixture(name="session")
 def fixture_session(engine):
-    """Crea una sesión para la base de datos."""
-    # Crear tablas antes de ejecutar las pruebas
+    """Creates a session for the database."""
+    # Create tables before running the tests
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
         yield session
-    # Limpiar después de las pruebas
+    # Clean up after tests
     SQLModel.metadata.drop_all(engine)
 
 class TestQueryDecorator:
     
     def test_select_query(self, session):
-        """Test para una consulta SELECT."""
-        print("\n🔍 Test: Consulta SELECT")
+        """Test for a SELECT query."""
+        print("\n🔍 Test: SELECT Query")
         print("━━━━━━━━━━━━━━━━━━━━━━━")
-        # Preparar datos
+        # Prepare data
         session.add_all([TestUser(name="Alice"), TestUser(name="Bob")])
         session.commit()
         
@@ -45,15 +45,15 @@ class TestQueryDecorator:
             pass
             
         result = get_users(session=session)
-        print(f"📦 Usuarios encontrados: {result}")
+        print(f"📦 Users found: {result}")
         assert len(result) == 2
         assert result[0]["name"] == "Alice"
         assert result[1]["name"] == "Bob"
-        print("✅ Test completado con éxito")
+        print("✅ Test completed successfully")
 
     def test_scalar_query(self, session):
-        """Test para una consulta escalar."""
-        print("\n🔍 Test: Consulta escalar (COUNT)")
+        """Test for a scalar query."""
+        print("\n🔍 Test: Scalar Query (COUNT)")
         print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         session.add(TestUser(name="Alice"))
         session.commit()
@@ -64,13 +64,13 @@ class TestQueryDecorator:
             pass
             
         result = count_users(session=session)
-        print(f"📊 Total de usuarios: {result}")
+        print(f"📊 Total users: {result}")
         assert result == 1
-        print("✅ Test completado con éxito")
+        print("✅ Test completed successfully")
 
     def test_parameterized_query(self, session):
-        """Test para una consulta parametrizada."""
-        print("\n🔍 Test: Consulta parametrizada")
+        """Test for a parameterized query."""
+        print("\n🔍 Test: Parameterized Query")
         print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         session.add(TestUser(name="Alice"))
         session.commit()
@@ -86,15 +86,15 @@ class TestQueryDecorator:
             """
             pass
             
-        result = find_by_name(session=session, name = "Alice")
-        print(f"📦 Usuario encontrado: {result}")
+        result = find_by_name(session=session, name="Alice")
+        print(f"📦 User found: {result}")
         assert len(result) == 1
         assert result[0]["name"] == "Alice"
-        print("✅ Test completado con éxito")
+        print("✅ Test completed successfully")
 
     def test_insert_query(self, session):
-        """Test para una consulta de inserción."""
-        print("\n🖋️ Test: Inserción de usuario")
+        """Test for an insert query."""
+        print("\n🖋️ Test: Inserting User")
         print("━━━━━━━━━━━━━━━━━━━━━━━━━━")
         @transactional
         @query(value="INSERT INTO test_users (name) VALUES (:name)")
@@ -103,8 +103,8 @@ class TestQueryDecorator:
             
         create_user(session=session, name="Carol")
         
-        # Corregir esta línea usando text()
+        # Fix this line using text()
         result = session.execute(text("SELECT * FROM test_users")).fetchall()
-        print(f"📦 Usuarios en la base de datos: {result}")
+        print(f"📦 Users in the database: {result}")
         assert len(result) == 1
         assert result[0][1] == "Carol"

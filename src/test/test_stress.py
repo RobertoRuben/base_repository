@@ -7,7 +7,7 @@ from typing import Optional
 from threading import Thread
 import time
 
-# Modelo de prueba
+# Test model
 class StressUser(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
@@ -17,7 +17,7 @@ class StressUser(SQLModel, table=True):
 # Fixtures
 @pytest.fixture(name="stress_engine")
 def fixture_engine():
-    """Configura el motor de base de datos para pruebas de estrés."""
+    """Configures the database engine for stress testing."""
     DATABASE_URL = "mysql+pymysql://root:oracle@localhost:3306/sqlmodel_db"
     engine = create_engine(DATABASE_URL, echo=False)
     SQLModel.metadata.create_all(engine)
@@ -26,18 +26,18 @@ def fixture_engine():
 
 @pytest.fixture(name="stress_session")
 def fixture_session(stress_engine):
-    """Crea una sesión para la base de datos."""
+    """Creates a session for the database."""
     with Session(stress_engine) as session:
         yield session
 
 
 @pytest.fixture
 def stress_crud():
-    """Crea una instancia del CRUD para el modelo StressUser."""
+    """Creates an instance of CRUD for the StressUser model."""
     return BasicOperations(StressUser)
 
 
-# Decoradores transaccionales
+# Transactional decorators
 @transactional
 def create_user(session: Session, crud: BasicOperations, name: str, balance: int):
     user = StressUser(name=name, balance=balance)
@@ -58,18 +58,18 @@ def get_user_balance(session: Session, user_id: int) -> int:
     return user.balance if user else 0
 
 
-# Test de estrés
+# Stress test
 def test_stress_operations(stress_engine, stress_crud):
-    """Test de estrés con operaciones CRUD concurrentes."""
-    print("\n🚀 Iniciando test de estrés")
-    NUM_USERS = 10000  # Número de usuarios a crear
-    NUM_THREADS = 50  # Número de hilos para concurrencia
-    BALANCE_INIT = 100  # Balance inicial por usuario
-    BATCH_SIZE = 500  # Tamaño de lote para creación de usuarios
+    """Stress test with concurrent CRUD operations."""
+    print("\n🚀 Starting stress test")
+    NUM_USERS = 10000  # Number of users to create
+    NUM_THREADS = 50  # Number of threads for concurrency
+    BALANCE_INIT = 100  # Initial balance per user
+    BATCH_SIZE = 500  # Batch size for creating users
 
-    start_time = time.time()  # Inicia el cronómetro
+    start_time = time.time()  # Start the timer
 
-    # Crear usuarios iniciales en lotes
+    # Create initial users in batches
     with Session(stress_engine) as session:
         for i in range(0, NUM_USERS, BATCH_SIZE):
             for j in range(BATCH_SIZE):
@@ -77,32 +77,32 @@ def test_stress_operations(stress_engine, stress_crud):
                 if user_id > NUM_USERS:
                     break
                 create_user(session, stress_crud, name=f"User_{user_id}", balance=BALANCE_INIT)
-                print(f"🛠️ Creando Usuario {user_id}")
+                print(f"🛠️ Creating User {user_id}")
             session.commit()
 
-    # Función de trabajo para los hilos
+    # Worker function for the threads
     def worker(thread_id: int):
         with Session(stress_engine) as session:
             for user_id in range(1, NUM_USERS + 1):
-                # Alternar entre actualizar y consultar balances
+                # Alternate between updating and checking balances
                 if user_id % 2 == 0:
                     update_user_balance(session, stress_crud, user_id=user_id, amount=10)
                 else:
                     balance = get_user_balance(session, user_id)
                     print(f"[Thread-{thread_id}] Balance User-{user_id}: {balance}")
 
-    # Crear y ejecutar hilos
+    # Create and run threads
     threads = [Thread(target=worker, args=(i,)) for i in range(NUM_THREADS)]
     for thread in threads:
         thread.start()
     for thread in threads:
         thread.join()
 
-    # Verificar balances finales
+    # Verify final balances
     with Session(stress_engine) as session:
         final_balances = [get_user_balance(session, user_id) for user_id in range(1, NUM_USERS + 1)]
         for user_id, balance in enumerate(final_balances, start=1):
-            print(f"✅ Usuario {user_id} - Balance final: {balance}")
+            print(f"✅ User {user_id} - Final balance: {balance}")
 
-    end_time = time.time()  # Termina el cronómetro
-    print(f"⏱️ Tiempo total de ejecución: {end_time - start_time:.2f} segundos")
+    end_time = time.time()  # End the timer
+    print(f"⏱️ Total execution time: {end_time - start_time:.2f} seconds")
