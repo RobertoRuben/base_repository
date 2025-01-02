@@ -3,7 +3,7 @@ from typing import Dict, Any, Callable, TypeVar, get_type_hints
 from functools import wraps
 from sqlmodel import Session
 from inspect import signature
-from src.repository.query.query_executor import QueryExecutor
+from base_repository.repository.query.query_executor import QueryExecutor
 
 # Regular expression to detect placeholders in the format ':param'
 placeholder_pattern = r':(\w+)'

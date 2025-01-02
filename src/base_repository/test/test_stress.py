@@ -1,8 +1,8 @@
 import pytest
 from sqlmodel import SQLModel, Session, Field, create_engine
 from datetime import datetime
-from src.repository.crud.crud_operations import BasicOperations
-from src.decorator.transactional import transactional
+from base_repository.repository.crud.crud_operations import BasicOperations
+from base_repository.decorator.transactional import transactional
 from typing import Optional
 from threading import Thread
 import time

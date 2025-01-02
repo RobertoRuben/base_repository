@@ -1,7 +1,7 @@
 import pytest
 from sqlmodel import Field, SQLModel, Session, create_engine, text
-from src.decorator.query import query
-from src.decorator.transactional import transactional
+from base_repository.decorator.query import query
+from base_repository.decorator.transactional import transactional
 from typing import Dict, Any, List
 
 # Model definition for the test table

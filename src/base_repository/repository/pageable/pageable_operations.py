@@ -4,7 +4,7 @@ from sqlalchemy.orm.relationships import RelationshipProperty
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 from typing import Generic, List, Type, Optional, Literal, TypeVar
 from natsort import natsorted
-from src.repository.pageable.page import Page, PageInfo
+from base_repository.repository.pageable.page import Page, PageInfo
 
 # Generic type T bound to SQLModel
 T = TypeVar("T", bound=SQLModel)

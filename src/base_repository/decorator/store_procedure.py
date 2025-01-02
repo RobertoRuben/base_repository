@@ -2,9 +2,9 @@ from typing import Callable, TypeVar, get_type_hints
 from functools import wraps
 from sqlmodel import Session
 from inspect import signature
-from src.repository.procedure.procedure_executor import ProcedureExecutor
-from src.repository.procedure.database_type import DatabaseType
-from src.exception.decorator_exception import StoreProcedureValidationError
+from base_repository.repository.procedure.procedure_executor import ProcedureExecutor
+from base_repository.repository.procedure.database_type import DatabaseType
+from base_repository.exception.decorator_exception import StoreProcedureValidationError
 
 T = TypeVar('T')
 

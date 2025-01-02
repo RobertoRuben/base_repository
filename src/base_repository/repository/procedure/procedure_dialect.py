@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any
-from src.exception.base_repository_exception import ProcedureValidationError
+from base_repository.exception.base_repository_exception import ProcedureValidationError
 
 class ProcedureDialect(ABC):
     @abstractmethod

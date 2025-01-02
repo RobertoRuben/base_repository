@@ -1,7 +1,7 @@
 import pytest
 from sqlmodel import Field, SQLModel, Session, create_engine, text
-from src.decorator.store_procedure import store_procedure, DatabaseType
-from src.decorator.transactional import transactional
+from base_repository.decorator.store_procedure import store_procedure, DatabaseType
+from base_repository.decorator.transactional import transactional
 
 class Phone(SQLModel, table=True):
     __tablename__ = "phones"

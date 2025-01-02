@@ -1,10 +1,10 @@
 import pytest
 from sqlmodel import SQLModel, Session, create_engine, select, Field
-from src.core.base_repository import BaseRepository
-from src.decorator.repository import repository
+from base_repository.core.base_repository import BaseRepository
+from base_repository.decorator.repository import repository
 from typing import Optional
 from datetime import datetime
-from src.exception.base_repository_exception import EntityNotFoundError
+from base_repository.exception.base_repository_exception import EntityNotFoundError
 
 # Entity model definition
 class Product(SQLModel, table=True):

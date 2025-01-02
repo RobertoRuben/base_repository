@@ -2,9 +2,9 @@ import pytest
 from sqlmodel import SQLModel, Session, create_engine, Field
 from typing import Optional
 from datetime import datetime
-from src.decorator.transactional import transactional
-from src.repository.crud.crud_operations import BasicOperations
-from src.exception.decorator_exception import TransactionError
+from base_repository.decorator.transactional import transactional
+from base_repository.repository.crud.crud_operations import BasicOperations
+from base_repository.exception.decorator_exception import TransactionError
 
 
 # Test model

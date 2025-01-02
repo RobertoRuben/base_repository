@@ -1,8 +1,8 @@
 from datetime import datetime
 import pytest
 from sqlmodel import SQLModel, Session, create_engine, Field, Relationship
-from src.repository.pageable.pageable_operations import PageableOperations
-from src.decorator.transactional import transactional
+from base_repository.repository.pageable.pageable_operations import PageableOperations
+from base_repository.decorator.transactional import transactional
 
 # Test Models
 class Author(SQLModel, table=True):

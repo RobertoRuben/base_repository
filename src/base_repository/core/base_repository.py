@@ -1,8 +1,8 @@
 from typing import TypeVar, Type
 from sqlmodel import SQLModel
-from src.repository.crud.crud_operations import BasicOperations 
-from src.repository.pageable.pageable_operations import PageableOperations
-from src.repository.find.find_operations import FindOperations
+from base_repository.repository.crud.crud_operations import BasicOperations 
+from base_repository.repository.pageable.pageable_operations import PageableOperations
+from base_repository.repository.find.find_operations import FindOperations
 
 T = TypeVar("T", bound=SQLModel)
 

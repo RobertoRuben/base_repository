@@ -2,14 +2,14 @@ from setuptools import setup, find_packages
 
 setup(
     name="base_repository",
-    version="0.1.0",
+    version="0.1.2",
     author="Roberto Ruben",
-    author_email="tu@email.com",
+    packages=find_packages("src"),
+    package_dir={"": "src"},
     description="A SQL repository pattern implementation",
     long_description=open("README.md", encoding="utf-8").read(),
     long_description_content_type="text/markdown",
     url="https://github.com/RobertoRuben/base_repository",
-    packages=find_packages(),
     install_requires=[
         "sqlmodel==0.0.22",
         "natsort==8.4.0"

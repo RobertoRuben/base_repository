@@ -1,5 +1,5 @@
 from typing import Literal, TypeVar, Generic, Type, Optional, List, Union
-from src.exception.base_repository_exception import ValidationError, EntityNotFoundError
+from base_repository.exception.base_repository_exception import ValidationError, EntityNotFoundError
 from sqlmodel import Session, select
 from sqlmodel import SQLModel
 from sqlalchemy.exc import SQLAlchemyError

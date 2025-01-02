@@ -4,7 +4,7 @@ from typing import Callable, TypeVar, Union
 from contextlib import contextmanager
 import time
 from sqlalchemy.exc import SQLAlchemyError
-from src.exception.decorator_exception import TransactionError, TransactionConfigError, TransactionValidationError
+from base_repository.exception.decorator_exception import TransactionError, TransactionConfigError, TransactionValidationError
 
 T = TypeVar("T")
 

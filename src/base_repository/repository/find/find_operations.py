@@ -2,7 +2,7 @@ from typing import Generic, TypeVar, Optional, List, Iterable, Dict, Any
 from sqlmodel import SQLModel, Session, select
 from datetime import datetime
 from sqlalchemy.exc import SQLAlchemyError
-from src.exception.base_repository_exception import ValidationError
+from base_repository.exception.base_repository_exception import ValidationError
 
 T = TypeVar("T", bound=SQLModel)
 
