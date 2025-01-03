@@ -67,6 +67,7 @@ class BasicOperations(Generic[T]):
             raise ValidationError(f"Entity must be of type {self.model_class.__name__}")
         try:
             session.add(entity)
+            session.flush()
             return entity
         except SQLAlchemyError:
             raise
@@ -255,6 +256,7 @@ class BasicOperations(Generic[T]):
                 setattr(db_entity, key, value)
             
             session.add(db_entity)
+            session.flush()
             return db_entity
         except SQLAlchemyError:
             raise
