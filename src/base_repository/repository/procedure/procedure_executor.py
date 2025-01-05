@@ -2,9 +2,9 @@ from typing import Dict, Any, List
 from sqlmodel import Session, text
 from sqlalchemy.exc import SQLAlchemyError, OperationalError, IntegrityError
 import time
-from src.repository.procedure.database_type import DatabaseType
-from src.repository.procedure.procedure_dialect import PostgreSQLDialect, MySQLDialect, SQLServerDialect, OracleDialect
-from src.exception.base_repository_exception import ProcedureValidationError
+from base_repository.repository.procedure.database_type import DatabaseType
+from base_repository.repository.procedure.procedure_dialect import PostgreSQLDialect, MySQLDialect, SQLServerDialect, OracleDialect
+from base_repository.exception.base_repository_exception import ProcedureValidationError
 
 class ProcedureExecutor:
     """

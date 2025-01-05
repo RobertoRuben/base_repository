@@ -52,3 +52,5 @@ settings_local.py
 # Archivos de cobertura de pruebas
 .coverage
 htmlcov/
+
+demo/

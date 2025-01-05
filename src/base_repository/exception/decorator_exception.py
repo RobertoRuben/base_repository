@@ -1,4 +1,4 @@
-from src.exception.base_repository_exception import RepositoryError
+from base_repository.exception.base_repository_exception import RepositoryError
 
 class StoreProcedureError(RepositoryError):
     """Base error for store procedure decorator."""
