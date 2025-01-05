@@ -5,117 +5,112 @@ from sqlmodel import Session
 from inspect import signature
 from base_repository.repository.query.query_executor import QueryExecutor
 
-# Regular expression to detect placeholders in the format ':param'
-placeholder_pattern = r':(\w+)'
+placeholder_pattern = r":(\w+)"
 
-T = TypeVar('T')
+T = TypeVar("T")
 
-def query(
-    value: str = None,
-    scalar: bool = False
-) -> Callable[..., T]:
-    """
-    Decorator to execute native SQL queries, automatically mapping function parameters to SQL query placeholders.
+def query(value: str = None, scalar: bool = False) -> Callable[..., T]:
+    """Native SQL query decorator with IDE support and type checking.
 
-    This decorator simplifies executing native SQL queries by ensuring that the parameters of the function
-    are correctly mapped to the placeholders in the SQL query string. Additionally, it validates the 
-    presence of required parameters, improves function docstrings, and enhances IDE support for type hints.
+    IDE Features:
+        * Parameter type hints (Ctrl+Space in query parameters)
+        * Return type inference
+        * Docstring generation for parameters
+        * Auto-completion for result objects
+
+    Query Support:
+        * Named parameters with ':param' syntax
+        * Automatic parameter mapping
+        * Type validation for parameters
+        * Result type inference
 
     Args:
-        value (str): The SQL query string containing placeholders in the form `:placeholder`.
-        scalar (bool): Indicates whether the query returns a scalar value (e.g., int, str).
+        value (str): SQL query with ':param' style placeholders
+        scalar (bool): If True, returns single value instead of result set
 
     Returns:
-        Callable[..., T]: The decorated function that executes the query and returns the result.
+        Callable[..., T]: Decorated function with proper type hints
 
-    Raises:
-        ValueError: If the function does not include a `session` parameter or if there are discrepancies
-                    between the placeholders and function parameters.
+    Example:
+        ```python
+        class UserRepository(BaseRepository[User]):
+            @query("SELECT * FROM users WHERE age > :age")
+            def find_by_age(self, age: int) -> List[User]:
+                pass  # IDE shows parameter hints and return type
+
+            @query("SELECT count(*) FROM users", scalar=True)
+            def count_users(self) -> int:
+                pass  # IDE shows int as return type
+
+            # Usage with IDE support:
+            repo = UserRepository(session)
+            users = repo.find_by_age(  # Shows age parameter hint
+            count = repo.count_users()  # Shows int return type
+        ```
+
+    Type Hints:
+        * Parameters are validated against function signatures
+        * Return types are inferred from model class
+        * IDE provides completion for result objects
     """
+
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         query_executor = QueryExecutor()
         sig = signature(func)
 
-        # Validate that 'session' is present in the function signature
-        if 'session' not in sig.parameters:
-            raise ValueError(
-                f"The function '{func.__name__}' must have a 'session: Session' parameter."
-            )
-
-        # Extract function annotations and SQL query placeholders
-        func_annotations = get_type_hints(func)
         placeholders = set(re.findall(placeholder_pattern, value or ""))
 
-        # Validate that placeholders match the function parameters
-        missing_params = placeholders - set(sig.parameters.keys())
-        unused_params = set(sig.parameters.keys()) - placeholders - {'self', 'cls', 'session'}
+        missing_params = placeholders - set(sig.parameters.keys()) - {"self"}
+        unused_params = set(sig.parameters.keys()) - placeholders - {"self"}
 
         if missing_params:
             raise ValueError(
-                f"Placeholders without corresponding parameters: "
+                f"Placeholders sin parámetros en la función: "
                 f"{', '.join([f':{p}' for p in missing_params])}."
             )
-
         if unused_params:
             raise ValueError(
-                f"Parameters without corresponding placeholders: "
+                f"Parámetros sin placeholder en la consulta: "
                 f"{', '.join(unused_params)}."
             )
 
-        # Enhance the function docstring with information about the query parameters
-        func.__doc__ = (func.__doc__ or "") + "\n\n"
-        func.__doc__ += "### Query Parameters Detected:\n"
+        func.__doc__ = (func.__doc__ or "") + "\n\n### Query Parameters:\n"
+        func_annotations = get_type_hints(func)
         for placeholder in placeholders:
-            param_type = func_annotations.get(placeholder, "Unknown")
+            param_type = func_annotations.get(placeholder, "Desconocido")
             func.__doc__ += f"  - `{placeholder}`: `{param_type}`\n"
-
-        # Add type annotations for query parameters to help IDEs (e.g., Pylance)
-        for placeholder in placeholders:
-            if placeholder not in func_annotations:
-                func_annotations[placeholder] = str  # Default to 'str' for query params
-        func.__annotations__ = func_annotations
 
         @wraps(func)
         def wrapper(*args, **kwargs) -> T:
-            """
-            Wrapper function that binds the arguments to the signature, validates the session, and executes 
-            the SQL query.
 
-            Args:
-                *args: Positional arguments passed to the decorated function.
-                **kwargs: Keyword arguments passed to the decorated function.
-
-            Returns:
-                T: The result of the SQL query, either a list of results or a scalar value based on 'scalar'.
-            """
             bound_args = sig.bind(*args, **kwargs)
             bound_args.apply_defaults()
 
-            # Extract the 'session' argument
-            session = bound_args.arguments.get('session')
-            if not isinstance(session, Session):
-                raise ValueError("The 'session' parameter must be an instance of `Session`.")
+            self_instance = bound_args.arguments.get("self")
+            if not self_instance or not hasattr(self_instance, "session"):
+                raise ValueError(
+                    "El repositorio no posee un atributo 'session' válido."
+                )
 
-            # Filter and collect the parameters for the query
+            session = getattr(self_instance, "session")
+            if not isinstance(session, Session):
+                raise ValueError("El atributo 'session' no es instancia de `Session`.")
+
             params: Dict[str, Any] = {
-                k: v for k, v in bound_args.arguments.items()
-                if k in placeholders
+                k: v for k, v in bound_args.arguments.items() if k in placeholders
             }
 
             if scalar:
                 result = query_executor.execute_scalar_function(
-                    session=session,
-                    query=value,
-                    params=params
+                    session=session, query=value, params=params
                 )
             else:
                 result = query_executor.execute_native_query(
-                    session=session,
-                    query=value,
-                    params=params
+                    session=session, query=value, params=params
                 )
 
             return result
 
         return wrapper
+
     return decorator

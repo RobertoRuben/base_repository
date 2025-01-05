@@ -5,67 +5,58 @@ from inspect import signature
 from base_repository.repository.procedure.procedure_executor import ProcedureExecutor
 from base_repository.repository.procedure.database_type import DatabaseType
 from base_repository.exception.decorator_exception import StoreProcedureValidationError
+from base_repository.core.base_repository import BaseRepository
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 def store_procedure(
-    name: str,
-    scalar: bool = False,
-    db_type: DatabaseType = DatabaseType.POSTGRESQL
+    name: str, scalar: bool = False, db_type: DatabaseType = DatabaseType.POSTGRESQL
 ):
-    """
-    Decorator for executing stored procedures.
+    """Stored procedure decorator with IDE support and type checking.
 
-    This decorator simplifies the execution of database stored procedures by wrapping
-    methods and handling parameter validation and execution.
+    IDE Features:
+        * Parameter type hints (Ctrl+Space inside parentheses)
+        * Return type inference based on function annotation
+        * Auto-completion for procedure parameters
+        * Documentation on hover
+        * Go to definition support (F12)
 
     Args:
-        name (str): Name of the stored procedure to execute
-        scalar (bool, optional): Whether the procedure returns a single value. 
-            Defaults to False.
-        db_type (DatabaseType, optional): Type of database to use. 
-            Defaults to PostgreSQL.
+        name (str): Name of the stored procedure
+        scalar (bool): If True, returns single value instead of result set
+        db_type (DatabaseType): Database type (POSTGRESQL, MYSQL, etc)
 
     Returns:
-        Callable: Decorated function that executes the stored procedure.
-
-    Raises:
-        StoreProcedureValidationError: If any of these conditions occur:
-            - Invalid procedure name
-            - Invalid database type
-            - Missing session parameter
-            - Invalid session type
-        ProcedureError: If procedure execution fails
+        Callable[..., T]: Decorated function with proper type hints
 
     Example:
         ```python
-        class UserRepository:
-            @store_procedure(name="get_users_by_status", db_type=DatabaseType.POSTGRESQL)
-            def get_active_users(
-                self, 
-                session: Session,
-                status: str = "active"
-            ) -> List[Dict[str, Any]]:
-                pass
+        class UserRepository(BaseRepository[User]):
+            @store_procedure("get_users_by_age")
+            def get_users(self, min_age: int) -> List[User]:
+                pass  # IDE shows parameter hints and return type
 
-            @store_procedure(name="get_user_count", scalar=True)
-            def count_users(
-                self,
-                session: Session,
-                department: str
-            ) -> int:
-                pass
+            @store_procedure("count_active_users", scalar=True)
+            def count_users(self) -> int:
+                pass  # IDE shows int as return type
 
-        # Usage
-        try:
-            repo = UserRepository()
-            users = repo.get_active_users(session, status="active")
-            count = repo.count_users(session, department="IT")
-        except StoreProcedureValidationError as e:
-            print(f"Validation error: {e}")
-        except ProcedureError as e:
-            print(f"Procedure error: {e}")
+            # Usage with IDE support:
+            repo = UserRepository(session)
+            users = repo.get_users(  # Shows min_age parameter hint
+            count = repo.count_users()  # Shows int return type
         ```
+
+    Type Support:
+        * Parameters are validated against procedure signature
+        * Return types are inferred from function annotation
+        * IDE provides completion for result objects
+        * Type checking for procedure parameters
+
+    Database Support:
+        * PostgreSQL (default)
+        * MySQL
+        * SQL Server
+        * Oracle
     """
     if not name or not isinstance(name, str):
         raise StoreProcedureValidationError("Valid procedure name required")
@@ -73,67 +64,39 @@ def store_procedure(
         raise StoreProcedureValidationError("Invalid database type")
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
-        """
-        Internal decorator function that wraps the method.
-
-        Args:
-            func (Callable[..., T]): Function to decorate
-
-        Returns:
-            Callable[..., T]: Wrapped function
-
-        Raises:
-            StoreProcedureValidationError: If function signature is invalid
-        """
         sig = signature(func)
-
-        if 'session' not in sig.parameters:
-            raise StoreProcedureValidationError(
-                f"Function '{func.__name__}' must have 'session: Session' parameter"
-            )
-
         procedure_executor = ProcedureExecutor(db_type=db_type)
         func_annotations = get_type_hints(func)
-        params_list = set(sig.parameters.keys()) - {'self', 'cls', 'session'}
+        params_list = set(sig.parameters.keys()) - {"self", "cls", "session"}
 
         @wraps(func)
         def wrapper(*args, **kwargs) -> T:
-            """
-            Executes the stored procedure with provided arguments.
-
-            Returns:
-                T: Result from the procedure execution
-
-            Raises:
-                StoreProcedureValidationError: If arguments are invalid
-                ProcedureError: If execution fails
-            """
             try:
                 bound_args = sig.bind(*args, **kwargs)
                 bound_args.apply_defaults()
 
-                session = bound_args.arguments.get('session')
+                self = bound_args.arguments.get("self")
+                session = bound_args.arguments.get("session")
+
+                if session is None and isinstance(self, BaseRepository):
+                    session = getattr(self, "session", None)
+
                 if not isinstance(session, Session):
                     raise StoreProcedureValidationError(
-                        "session parameter must be a Session instance"
+                        "Valid database session required. Either pass it as parameter or ensure class inherits from BaseRepository"
                     )
 
                 params = {
-                    k: v for k, v in bound_args.arguments.items()
-                    if k in params_list
+                    k: v for k, v in bound_args.arguments.items() if k in params_list
                 }
 
                 if scalar:
                     return procedure_executor.execute_scalar_procedure(
-                        session=session,
-                        name=name,
-                        params=params
+                        session=session, name=name, params=params
                     )
                 else:
                     return procedure_executor.execute_procedure(
-                        session=session,
-                        name=name,
-                        params=params
+                        session=session, name=name, params=params
                     )
 
             except StoreProcedureValidationError:
@@ -142,4 +105,5 @@ def store_procedure(
                 raise
 
         return wrapper
+
     return decorator

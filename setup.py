@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="base_repository",
-    version="0.1.2",
+    version="0.1.0",
     author="Roberto Ruben",
     packages=find_packages("src"),
     package_dir={"": "src"},
