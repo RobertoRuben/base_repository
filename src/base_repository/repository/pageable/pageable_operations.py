@@ -1,42 +1,108 @@
 from sqlalchemy import BinaryExpression, or_
+from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import SQLModel, Session, select, func
 from sqlalchemy.orm.relationships import RelationshipProperty
 from sqlalchemy.orm.attributes import InstrumentedAttribute
-from typing import Generic, List, Type, Optional, Literal, TypeVar
+from typing import Any, Dict, Generic, List, Type, Optional, Literal, TypeVar
 from natsort import natsorted
 from base_repository.repository.pageable.page import Page, PageInfo
 
-# Generic type T bound to SQLModel
 T = TypeVar("T", bound=SQLModel)
 
 class PageableOperations(Generic[T]):
-    """
-    Pageable operations for database entities supporting pagination, sorting, and filtering.
     
-    Attributes:
-        model_class (Type[T]): The SQLModel class type for entities.
-    
+    """Pagination operations with full IDE support and type checking.
+
+    IDE Features:
+        * Method autocompletion (type '.')
+        * Parameter type hints (Ctrl+Space)
+        * Return type inference (Page[T])
+        * Go to definition support (F12)
+
+    Available Methods:
+        * get_page(...) -> Page[dict]
+        * find_page(search_term, fields, ...) -> Page[dict]
+
     Example:
         ```python
-        class User(SQLModel):
-            id: int
-            name: str
-            
-        pageable = PageableOperations[User](User)
-        page = pageable.get_page(session, page=1, size=10)
-        ```
-    """
-    def __init__(self, model_class: Type[T]):
-        """
-        Initialize PageableOperations with a specific model class.
+        class UserRepo(PageableOperations[User]):
+            def __init__(self, session: Session):
+                super().__init__(User, session)
+
+        # IDE Support Features:
+        repo = UserRepo(session)
+        page = repo.get_page(
+            page=1,                    # Type hints
+            size=10,                   # Type hints
+            order_by="created_at",     # Field completion
+            sort_order="desc"          # Value completion
+        )
+
+        # Search with pagination:
+        results = repo.find_page(
+            search_term="john",        # Type hints
+            search_fields=["name"],    # Field suggestions
+            page=1,
+            size=10
+        )
+
+        # Access paginated data:
+        for item in page.data:        # IDE shows dict keys
+            print(item["name"])        # Field completion
         
-        :param model_class: The SQLModel class to operate on.
+        print(page.pagination.total_pages)  # PageInfo completion
+        ```
+
+    Type Support:
+        * T = Your model type (SQLModel)
+        * Page[dict] return type
+        * Full parameter validation
+        * Generic type checking
+    """
+
+    def __init__(self, model_class: Type[T], session: Session = None):
+        """Initialize pagination operations with IDE support.
+
+        IDE Features:
+            * Type checking for model_class
+            * Session validation hints
+            * Field name completion
+            * Go to definition support
+
+        Args:
+            model_class: SQLModel class for pagination
+                    IDE shows available fields
+            session: Database session for queries
+                    IDE validates Session type
+
+        Example:
+            ```python
+            class UserRepo(PageableOperations[User]):
+                def __init__(self, session: Session):
+                    super().__init__(User, session)  # IDE validates types
+                    
+            repo = UserRepo(session)
+            # IDE shows available fields from User model
+            ```
+
+        Raises:
+            ValueError: If model_class is not SQLModel type
         """
+        if not issubclass(model_class, SQLModel):
+            raise ValueError("model_class must be a SQLModel type")
         self.model_class = model_class
+        self.session = session
+        self.model_fields = list(self.model_class.__fields__.keys())
+
+    def _validate_session(self):
+        if not self.session:
+            raise ValueError("Session not initialized")
+        
+    def _order_dict_by_model(self, item: Dict[str, Any]) -> Dict[str, Any]:
+        return {field: item[field] for field in self.model_fields if field in item}
 
     def get_page(
         self,
-        session: Session,
         page: int = 1,
         size: int = 10,
         join_relations: Optional[List[RelationshipProperty]] = None,
@@ -46,34 +112,54 @@ class PageableOperations(Generic[T]):
         order_by: Optional[str] = None,
         sort_order: Optional[Literal["asc", "desc"]] = None,
     ) -> Page[dict]:
-        """
-        Retrieve a paginated and optionally filtered/sorted list of records.
+        """Get paginated results.
 
-        :param session: The active SQLAlchemy session to execute the query.
-        :param page: The current page number (1-based index).
-        :param size: The number of items per page (maximum capped at 100).
-        :param join_relations: A list of model relationships to join in the query.
-        :param join_type: The type of SQL join ("inner" or "left"). Default is "inner".
-        :param select_fields: A list of specific fields to include in the SELECT clause.
-        :param where: A SQLAlchemy binary expression for filtering results.
-        :param order_by: The name of the field to sort the results by.
-        :param sort_order: The sorting order, either "asc" for ascending or "desc" for descending. Default is "asc".
-        :return: A Page object containing paginated results and metadata.
-        :raises ValueError: If invalid pagination parameters are provided.
-        :raises SQLAlchemyError: For any database-related errors.
+        Args:
+            page: Page number (>= 1)
+            size: Items per page (>= 1)
+            join_relations: Related entities to join
+            join_type: Join type ("inner" or "left")
+            select_fields: Fields to select
+            where: Filter condition
+            order_by: Sort field name
+            sort_order: Sort direction
+
+        Returns:
+            Page[dict]: Paginated results with metadata
+
+        Example:
+            ```python
+            repo = UserRepository(session)
+            page = repo.get_page(
+                page=1,
+                size=10,
+                join_relations=[User.posts],  # Relation completion
+                join_type="left",             # Value suggestion
+                order_by="created_at",        # Field completion
+                sort_order="desc"             # Value suggestion
+            )
+            
+            for item in page.data:            # Type inference
+                print(item["name"])           # Field completion
+            
+            print(page.pagination.total_pages) # PageInfo completion
+            ```
+
+        Raises:
+            ValueError: If invalid page/size values
+            RuntimeError: If database operation fails
         """
+        self._validate_session()
+
         try:
-            # Validate pagination boundaries
             if page < 1 or size < 1:
                 raise ValueError("Page and size must be greater than 0.")
 
             join_type = join_type or "inner"
             sort_order = sort_order or "asc"
 
-            # Build the base query
             query = select(*select_fields) if select_fields else select(self.model_class)
 
-            # Add explicit joins for relationships
             if join_relations:
                 for relation in join_relations:
                     if join_type == "inner":
@@ -81,11 +167,9 @@ class PageableOperations(Generic[T]):
                     elif join_type == "left":
                         query = query.outerjoin(relation)
 
-            # Apply WHERE conditions
             if where is not None:
                 query = query.where(where)
 
-            # Count total items for pagination
             count_query = select(func.count()).select_from(self.model_class)
             if join_relations:
                 for relation in join_relations:
@@ -95,15 +179,16 @@ class PageableOperations(Generic[T]):
                         count_query = count_query.outerjoin(relation)
             if where is not None:
                 count_query = count_query.where(where)
-            total_items = session.execute(count_query).scalar()
+            total_items = self.session.execute(count_query).scalar()
 
-            # Execute the main query without sorting
-            results = session.execute(query).all()
+            results = self.session.execute(query).all()
 
-            # Transform query results into dictionaries
-            items = [dict(row._mapping) for row in results]
+            items = []
+            for row in results:
+                item_dict = dict(row._mapping[self.model_class.__name__])
+                ordered_item = self._order_dict_by_model(item_dict)
+                items.append(ordered_item)
 
-            # Apply natural sorting if order_by is provided
             if order_by:
                 items = natsorted(
                     items,
@@ -111,15 +196,12 @@ class PageableOperations(Generic[T]):
                     reverse=(sort_order == "desc")
                 )
 
-            # Apply pagination to the sorted items
             start = (page - 1) * size
             end = start + size
             paginated_items = items[start:end]
 
-            # Calculate total pages
             total_pages = (total_items + size - 1) // size if total_items > 0 else 1
 
-            # Build and return the Page object
             page_info = PageInfo(
                 current_page=page,
                 page_size=size,
@@ -129,15 +211,12 @@ class PageableOperations(Generic[T]):
             return Page(data=paginated_items, pagination=page_info)
 
         except ValueError as e:
-            raise e  # Let ValueError propagate as it is meaningful for users.
-        except exec.SQLAlchemyError as e:
-            # Re-raise SQLAlchemy exceptions with additional context
+            raise e
+        except SQLAlchemyError as e:
             raise RuntimeError(f"Database error occurred: {e}") from e
-        
-    
+
     def find_page(
         self,
-        session: Session,
         search_term: str,
         search_fields: List[str],
         page: int = 1,
@@ -147,61 +226,64 @@ class PageableOperations(Generic[T]):
         order_by: Optional[str] = None,
         sort_order: Optional[Literal["asc", "desc"]] = None,
     ) -> Page[dict]:
-        """
-        Search and paginate records containing the search term in specified fields.
+        """Search and paginate entities.
 
         Args:
-            session: Database session
-            search_term: Term to search for
-            search_fields: List of fields to search in
-            page: Page number (1-based index)
-            size: Number of items per page
-            join_relations: List of relationships to join in the query
-            join_type: Type of SQL join ("inner" or "left")
-            order_by: Field to sort results by
-            sort_order: Sort direction ("asc" or "desc")
+            search_term: Text to search for
+            search_fields: Fields to search in
+            page: Page number (>= 1)
+            size: Items per page (>= 1)
+            join_relations: Related entities to join
+            join_type: Join type ("inner" or "left")
+            order_by: Sort field name
+            sort_order: Sort direction
 
         Returns:
-            Page[dict]: Page object containing results and metadata
-
-        Raises:
-            ValueError: If search parameters are invalid
-            SQLModelError: If a database error occurs
-            RuntimeError: For other unexpected errors
+            Page[dict]: Paginated search results
 
         Example:
+            ```python
+            repo = UserRepository(session)
+            # IDE shows parameter hints:
             results = repo.find_page(
-                session,
-                search_term="john",
-                search_fields=["name", "email"],
-                page=1,
-                size=10
+                search_term="john",        # String validation
+                search_fields=["name"],    # Field completion
+                page=1,                    # Number validation
+                size=10,                   # Number validation
+                order_by="created_at",     # Field completion
+                sort_order="desc"          # Value suggestion
             )
+            
+            for item in results.data:      # Type inference
+                print(item["name"])        # Field completion
+            
+            total = results.pagination.total_items  # Property completion
+            ```
+
+        Raises:
+            ValueError: If invalid search parameters
+            RuntimeError: If database operation fails
         """
+        self._validate_session()
+
         try:
             if not search_term or not search_fields:
                 raise ValueError("Search term and search fields are required")
 
-            # Build search conditions
             search_conditions = []
             for field in search_fields:
                 try:
                     column = getattr(self.model_class, field)
-                    search_conditions.append(
-                        column.ilike(f"%{search_term}%")
-                    )
+                    search_conditions.append(column.ilike(f"%{search_term}%"))
                 except AttributeError:
                     continue
 
             if not search_conditions:
                 raise ValueError("No valid search fields found")
 
-            # Combine conditions with OR
             where_condition = or_(*search_conditions)
 
-            # Use get_page with search conditions
             return self.get_page(
-                session=session,
                 page=page,
                 size=size,
                 join_relations=join_relations,
@@ -213,7 +295,7 @@ class PageableOperations(Generic[T]):
 
         except ValueError as e:
             raise e
-        except exec.SQLAlchemyError as e:
-            raise RuntimeError(f"Database error occurred: {str(e)}") from e 
+        except SQLAlchemyError as e:
+            raise RuntimeError(f"Database error occurred: {str(e)}") from e
         except Exception as e:
             raise RuntimeError(f"Search error: {str(e)}") from e

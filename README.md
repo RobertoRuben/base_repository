@@ -1,869 +1,790 @@
-  
-#  Base Repository 🚀
 
-> ⚠️ **Note**: This library is currently in beta. Some features may not
-> be fully stable.
+# Base Repository 🚀
 
-A Python library implementing the repository pattern for SQL operations using SQLModel.
+> ⚠️ **Note**: This library is currently in beta. Feedback and contributions are welcome!
 
-##  Installation 📦
-You can install **Base Repository** by running the following command in your terminal:
+A powerful Python library that implements the repository pattern for SQL operations, providing a clean and type-safe way to interact with your database using SQLModel and FastAPI.
+
+## Quick Overview 🎯
+
+```python
+from base_repository import BaseRepository
+
+# Define your repository
+class UserRepo(BaseRepository[User]):
+    def __init__(self, session = Depends(get_session)):
+        super().__init__(User, session)
+
+# Use built-in operations with full type support
+users = repo.find_by({"status": "active"})
+latest = repo.find_latest(order_by="created_at")
+page = repo.get_page(page=1, size=10)
+```
+
+## Key Features ⭐
+
+- 🔒 **Type-Safe Operations**: Full IDE support with type hints
+- 📦 **Built-in CRUD**: Ready-to-use repository pattern implementation
+- 🔍 **Advanced Querying**: Native SQL, stored procedures, and complex searches
+- 📑 **Smart Pagination**: Built-in support for paginated queries
+- 🛡️ **Transaction Management**: Automatic handling with `@transactional`
+- 💉 **FastAPI Integration**: Seamless dependency injection support
+
+## Installation 📦
+
 ```bash
-pip install  base-repository
+pip install base-repository
 ```
 
-## Basic Usage 🛠️
-Learn how to quickly set up and use **Base Repository** for seamless CRUD operations, pagination, advanced searches, and transaction management in your projects.
+## Documentation Structure 📚
 
-### Define Model 📝
----
+1. [Getting Started](#getting-started)
+2. [Core Concepts](#core-concepts)
+3. [Advanced Features](#advanced-features)
+4. [API Reference](#api-reference)
+5. [Examples & Use Cases](#examples--use-cases)
+
+## Getting Started 🚀
+
+### 1. Configure Database and Session Management
+
 ```python
-from typing import Optional
+# config/database.py
+from sqlmodel import SQLModel, create_engine, Session
+from fastapi import Depends
+from .settings import settings
+
+# Database URL configuration
+db_url = f"mysql+pymysql://{settings.DATABASE_USER}:{settings.DATABASE_PASSWORD}@{settings.DATABASE_HOST}:{settings.DATABASE_PORT}/{settings.DATABASE_NAME}"
+
+# Create engine
+engine = create_engine(db_url, echo=True)
+
+# Create all tables
+def create_db_and_tables():
+    SQLModel.metadata.create_all(engine)
+
+# Session dependency for FastAPI
+def get_session():
+    """
+    FastAPI dependency that provides a database session.
+    Usage in repositories:
+        def __init__(self, session: Session = Depends(get_session)):
+            super().__init__(Model, session)
+    """
+    with Session(engine) as session:
+        yield session
+```
+
+### 2. Define Your Model
+
+```python
 from sqlmodel import SQLModel, Field
-
-class User(SQLModel,  table=True):
-    id: int | None  =  Field(default=None,  primary_key=True)
-    name:  str
-    email:  str
-```
-
-
-### Create Repository 🏗️
----
-```python
-from base_repository.core.base_repository import BaseRepository
-from base_repository.decorator.repository import repository
-
-@repository
-class UserRepository(BaseRepository[User]):
-      pass
-```
-
-### Use Repository ⚙️
----
-```python
-from sqlmodel import create_engine, Session
-
-engine =  create_engine("sqlite:///database.db")
-session =  Session(engine)
-repo =  UserRepository()
-```
-
-# Decorators 🎨
-Decorators in this library are used to simplify and manage various aspects of database operations. They provide a clean and consistent way to handle transactions, stored procedures, and native SQL queries.
-
-The library provides the following four decorators:
-
-1.  `@transactional`
-
-2.  `@store_procedure`
-
-3.  `@query`
-
-4.  `@repository`
-
-
-## Transactional 🔄
-
-The  `@transactional`  decorator is used to manage database transactions. It ensures that the operations within the decorated function are executed within a transaction context. If an error occurs, the transaction is rolled back.
-
-By default, the  `@transactional`  decorator uses  auto_concurrent=True  and  read_only=False.
-
-#### Usage
-
-```python
-from base_repository.decorator.transactional import transactional
-
-@transactional
-def create_user(session: Session,  user: User)  -> User:
-    return repo.save(session, user)
-```
-
-#### Configuration
-
--   **auto_concurrent**: Enables REPEATABLE READ isolation level for concurrent transactions.
--   **read_only:** Enables read-only mode for the transaction.
-
-#### Example with Configuration
-
-```python
-@transactional(auto_concurrent=True,  read_only=False)
-def update_user(session: Session,  user_id:  int,  new_name:  str)  -> User:
-    user = repo.get_by_id(session, user_id)
-    user.name = new_name
-    return repo.save(session, user)
-```
-
-#### Read-Only Operations
-
-To perform read-only operations, set the  read_only  parameter to  `True`.
-
-```python
-@transactional(read_only=True)
-def get_user_by_id(session: Session, user_id: int) -> User:
-    return repo.get_by_id(session, user_id)
-```
-#### Error Handling
-
-The  `@transactional`  decorator handles various exceptions:
-
--   TransactionConfigError: Raised for configuration errors.
--   TransactionValidationError: Raised for validation errors.
--   TransactionError: Raised for general transaction errors.
--   SQLAlchemyError: Raised for database errors.
-
-#### Example with Error Handling
-```python
-from base_repository.exception.decorator_exception import TransactionError
-
-@transactional
-def delete_user(session: Session,  user_id:  int):
-    try:
-        repo.delete(session, user_id)
-    except TransactionError as e:
-        print(f"Transaction failed: {str(e)}")
-```
-
-
-## Store Procedure 🗃️
-The `@store_procedure` decorator simplifies the execution of database stored procedures by wrapping methods and handling parameter validation and execution.
-
-#### Supported Databases
-The `@store_procedure` decorator supports the following databases:
-- PostgreSQL
-- MySQL
-- SQLServer
-- Oracle
-
-⚠️ **Note**: Ensure you have the necessary database connector installed for your database. For example:
-- PostgreSQL: `pip install psycopg2`
-- MySQL: `pip install mysql-connector-python`
-- SQLServer: `pip install pyodbc`
-- Oracle: `pip install cx_Oracle`
-
-#### Usage
-```python
-from base_repository.decorator.store_procedure import store_procedure
-from base_repository.repository.procedure.database_type import DatabaseType
-
-class UserRepository:
-    @store_procedure(name="get_users_by_status", db_type=DatabaseType.POSTGRESQL)
-    def get_active_users(self, session: Session, status: str = "active"):
-        pass
-
-    @store_procedure(name="get_user_count", scalar=True, db_type=DatabaseType.MYSQL)
-    def count_users(self, session: Session, department: str) -> int:
-        pass
-```
-
-#### Example
-```python
-repo = UserRepository()
-users = repo.get_active_users(session, status="active")
-count = repo.count_users(session, department="IT")
-```
-
-#### Detailed Explanation
-
-The `@store_procedure` decorator handles the following:
-- **Parameter Validation**: Ensures that the procedure name and parameters are valid.
-- **Execution**: Executes the stored procedure with the provided parameters.
-- **Database Dialects**: Supports different SQL dialects for various databases.
-
-#### Configuration
-
-- **name**: The name of the stored procedure to execute.
-- **scalar**: Whether the procedure returns a single value. Defaults to `False`.
-- **db_type**: The type of database to use. Defaults to DatabaseType.POSTGRESQL
-
-
-#### Example with Configuration
-
-```python
-@store_procedure(name="get_users_by_status", db_type=DatabaseType.POSTGRESQL)
-def get_active_users(self, session: Session, status: str = "active"):
-    pass
-
-@store_procedure(name="get_user_count", scalar=True, db_type=DatabaseType.MYSQL)
-def count_users(self, session: Session, department: str) -> int:
-    pass
-```
-
-#### Error Handling
-
-The `@store_procedure` decorator handles various exceptions:
- 
-
-- `StoreProcedureValidationError` : Raised for validation errors.
-- `ProcedureError`: Raised for general procedure execution errors.
-
-#### Example with Error Handling
-
-```python
-from base_repository.exception.decorator_exception import StoreProcedureValidationError, ProcedureError
-
-try:
-    repo = UserRepository()
-    users = repo.get_active_users(session, status="active")
-    count = repo.count_users(session, department="IT")
-except StoreProcedureValidationError as e:
-    print(f"Validation error: {e}")
-except ProcedureError as e:
-    print(f"Procedure error: {e}")
-```
-
-
-## Query 🔍
-The `@query` decorator is used to execute native SQL queries, automatically mapping function parameters to SQL query placeholders.
-
-#### Usage
-```python
-from base_repository.decorator.query import query
-
-class  UserRepository:
-    @query("SELECT * FROM users WHERE status = :status")
-    def get_users_by_status(self,  session: Session,  status:  str):
-        pass
-
-    @query("SELECT COUNT(*) FROM users WHERE department = :department",  scalar=True)
-    def count_users(self,  session: Session,  department:  str)  ->  int:
-        pass
-```
-
-#### Usage
-```python
-repo =  UserRepository()
-users = repo.get_users_by_status(session,  status="active")
-count = repo.count_users(session,  department="IT")
-```
-
-## Repository 🏗️
-The `@repository` decorator configures a repository with its model class, extracting the model class from the first generic base class and configuring the repository instance with it.
-
-### Usage
-```python
-from base_repository.core.base_repository import BaseRepository
-from base_repository.decorator.repository import repository
-
-@repository
-class UserRepository(BaseRepository[User]):
-    pass
-```
-
-
-
-# CRUD Operations 🗂️
-The  BasicOperations class provides fundamental CRUD operations for managing database entities. This class supports SQLModel and Pydantic models.
-
-## Save a New User
-For write operations, use the `@transactional` decorator to ensure the operation is executed within a transaction context.
-
-#### Without `@transactional`
-```python
-def save_user(session: Session, user: User) -> User:
-    session.add(user)
-    session.commit()  # Manual commit
-    return user
-
-user = User(name="John", email="john@example.com")
-saved_user = save_user(session, user)
-```
-
-#### With `@transactional`
-```python
-from base_repository.decorator.transactional import transactional
-
-@transactional
-def save_user(session: Session, user: User) -> User:
-    session.add(user)
-    return user
-
-user = User(name="John", email="john@example.com")
-saved_user = save_user(session, user)
-```
-
-## Get All Users
-For read operations, use the `@transactional` decorator with `read_only=True` to ensure the operation is executed in read-only mode.
-
-#### Without `@transactional`
-```python
-def get_all_users(session: Session) -> List[User]:
-    return session.exec(select(User)).all()
-
-users = get_all_users(session)
-```
-
-#### With `@transactional`
-```python
-@transactional(read_only=True)
-def get_all_users(session: Session) -> List[User]:
-    return session.exec(select(User)).all()
-
-users = get_all_users(session)
-```
-
-## Get User by ID
-The get_by_id method retrieves an entity by its ID from the database. It performs a direct lookup by primary key and returns the entity if found.
-#### Without `@transactional`
-```python
-def get_user_by_id(session: Session, user_id: int) -> User:
-    return session.get(User, user_id)
-
-user = get_user_by_id(session, 1)
-```
-
-#### With `@transactional`
-```python
-@transactional(read_only=True)
-def get_user_by_id(session: Session, user_id: int) -> User:
-    return session.get(User, user_id)
-
-user = get_user_by_id(session, 1)
-```
-
-## Update User
-The update method updates an existing entity in the database by its ID with new data. It ensures all fields being updated are valid for the entity type.
-
-#### Without `@transactional`
-```python
-def update_user(session: Session, user_id: int, new_name: str) -> User:
-    user = session.get(User, user_id)
-    user.name = new_name
-    session.commit()  # Manual commit
-    return user
-
-updated_user = update_user(session, 1, "John Doe")
-```
-
-#### With `@transactional`
-```python
-@transactional
-def update_user(session: Session, user_id: int, new_name: str) -> User:
-    user = session.get(User, user_id)
-    user.name = new_name
-    return user
-
-updated_user = update_user(session, 1, "John Doe")
-```
-
-## Delete User
-The delete method deletes an entity from the database by its ID. It ensures the entity exists before deletion.
-#### Without `@transactional`
-```python
-def delete_user(session: Session, user_id: int) -> bool:
-    user = session.get(User, user_id)
-    session.delete(user)
-    session.commit()  # Manual commit
-    return True
-
-delete_success = delete_user(session, 1)
-```
-
-#### With `@transactional`
-```python
-@transactional
-def delete_user(session: Session, user_id: int) -> bool:
-    user = session.get(User, user_id)
-    session.delete(user)
-    return True
-
-delete_success = delete_user(session, 1)
-```
-
-### Detailed Explanation
-
-The BasicOperations class includes the following methods:
-
-- **save**: Persists a new entity to the database.
-- **get_all**: Retrieves all entities from the database.
-- **get_by_id**: Retrieves an entity by its ID.
-- **update**: Updates an existing entity.
-- **delete**: Deletes an entity by its ID.
-
-#### Example with Detailed CRUD Operations
-
-```python
-from sqlmodel import SQLModel, Field, Session, create_engine
-from base_repository.core.base_repository import BaseRepository
-from base_repository.decorator.repository import repository
-from base_repository.decorator.transactional import transactional
-
-class User(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
+from decimal import Decimal
+from datetime import datetime
+
+class Product(SQLModel, table=True):
+    id: int | None = Field(primary_key=True, index=True)
     name: str
-    email: str
+    price: Decimal
+    stock: int
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+```
 
-@repository
+### 3. Create Your Repository
+
+```python
+from fastapi import Depends
+from sqlmodel import Session
+from base_repository import BaseRepository
+from .database import get_session
+
+class ProductRepository(BaseRepository[Product]):
+    def __init__(self, session: Session = Depends(get_session)):
+        super().__init__(Product, session)
+    
+    @query("SELECT * FROM product WHERE price > :min_price")
+    def find_premium_products(self, min_price: Decimal) -> List[Product]:
+        pass
+```
+
+### 4. Create Your Service
+
+```python
+from fastapi import Depends
+
+class ProductService:
+    def __init__(self, repo: ProductRepository = Depends()):
+        self.repo = repo
+    
+    @transactional
+    async def create_product(self, data: ProductCreate) -> Product:
+        return self.repo.save(Product(**data.dict()))
+    
+    @transactional(read_only=True)
+    async def get_product_catalog(self, page: int = 1) -> Page[Product]:
+        return self.repo.get_page(
+            page=page,
+            size=20,
+            order_by="name"
+        )
+```
+
+### 5. Use in FastAPI Controllers
+
+```python
+from fastapi import APIRouter, Depends
+from .service import ProductService
+
+router = APIRouter(prefix="/products", tags=["Products"])
+
+@router.post("/", response_model=ProductResponse)
+async def create_product(
+    data: ProductCreate,
+    service: ProductService = Depends()
+):
+    return await service.create_product(data)
+
+@router.get("/", response_model=Page[ProductResponse])
+async def get_products(
+    page: int = 1,
+    service: ProductService = Depends()
+):
+    return await service.get_product_catalog(page)
+```
+
+## Core Concepts 🎓
+
+### Repository Pattern with FastAPI
+
+Base Repository implements the repository pattern with proper FastAPI dependency injection:
+
+```python
+from fastapi import Depends
+from sqlmodel import Session
+from base_repository import BaseRepository
+from .database import get_session
+
 class UserRepository(BaseRepository[User]):
-    pass
-
-# Setup database
-engine = create_engine("sqlite:///database.db")
-session = Session(engine)
-
-repo = UserRepository()
-
-# Save a new user
-@transactional
-def save_user(session: Session, user: User) -> User:
-    return repo.save(session, user)
-
-user = User(name="John", email="john@example.com")
-saved_user = save_user(session, user)
-
-# Get all users
-@transactional(read_only=True)
-def get_all_users(session: Session) -> List[User]:
-    return repo.get_all(session)
-
-users = get_all_users(session)
-
-# Get user by ID
-@transactional(read_only=True)
-def get_user_by_id(session: Session, user_id: int) -> User:
-    return repo.get_by_id(session, user_id)
-
-user = get_user_by_id(session, 1)
-
-# Update user
-@transactional
-def update_user(session: Session, user_id: int, new_name: str) -> User:
-    user = repo.get_by_id(session, user_id)
-    user.name = new_name
-    return repo.update(session, user_id, user)
-
-updated_user = update_user(session, 1, "John Doe")
-
-# Delete user
-@transactional
-def delete_user(session: Session, user_id: int) -> bool:
-    return repo.delete(session, user_id)
-
-delete_success = delete_user(session, 1)
+    def __init__(self, session: Session = Depends(get_session)):
+        super().__init__(User, session)
+        
+    # Custom methods with automatic session management
+    def find_active_users(self) -> List[User]:
+        return self.find_by({"status": "active"})
 ```
 
-### Error Handling
+### Built-in Operations
 
-The BasicOperations class handles various exceptions:
+Every repository automatically includes:
 
-- `ValidationError`: Raised for validation errors.
-- `EntityNotFoundError`: Raised when an entity is not found.
-- `SQLAlchemyError`: Raised for general database errors.
-
-#### Example with Error Handling
-
+1. **Basic CRUD**:
 ```python
-from base_repository.exception.base_repository_exception import EntityNotFoundError, ValidationError
+class UserService:
+    def __init__(self, repo: UserRepository = Depends()):
+        self.repo = repo
 
-try:
-    user = get_user_by_id(session, 1)
-except EntityNotFoundError:
-    print("User not found")
-except ValidationError as e:
-    print(f"Validation error: {e}")
-except SQLAlchemyError as e:
-    print(f"Database error: {e}")
+    # Create
+    @transactional
+    async def create_user(self, data: UserCreate) -> User:
+        return self.repo.save(User(**data.dict()))
+
+    # Read
+    @transactional(read_only=True)
+    async def get_user(self, id: int) -> User:
+        return self.repo.get_by_id(id)
+
+    # Update
+    @transactional
+    async def update_user(self, id: int, data: UserUpdate) -> User:
+        return self.repo.update(id, User(**data.dict()))
+
+    # Delete
+    @transactional
+    async def delete_user(self, id: int) -> bool:
+        return self.repo.delete(id)
 ```
 
-# Find Operations 🔎
-The FindOperations class provides methods to retrieve entities from the database based on various criteria. This class supports SQLModel models.
-
-## Find User by ID
-The find_by_id method retrieves an entity by its ID from the database. It performs a direct lookup by primary key and returns the entity if found.
-
-#### Without `@transactional`
+2. **Advanced Find Operations**:
 ```python
-def find_user_by_id(session: Session, user_id: int) -> User:
-    return repo.find_by_id(session, user_id)
-
-user = find_user_by_id(session, 1)
-```
-
-#### With `@transactional`
-```python
-from base_repository.decorator.transactional import transactional
-
-@transactional(read_only=True)
-def find_user_by_id(session: Session, user_id: int) -> User:
-    return repo.find_by_id(session, user_id)
-
-user = find_user_by_id(session, 1)
-```
-
-## Find All Users
-The find_all method retrieves all entities from the database.
-
-#### Without `@transactional`
-```python
-def find_all_users(session: Session) -> List[User]:
-    return repo.find_all(session)
-
-users = find_all_users(session)
-```
-
-#### With `@transactional`
-```python
-@transactional(read_only=True)
-def find_all_users(session: Session) -> List[User]:
-    return repo.find_all(session)
-
-users = find_all_users(session)
-```
-
-## Find Users by Criteria
-The find_by method retrieves entities based on specified criteria.
-
-#### Without `@transactional`
-```python
-def find_users_by_criteria(session: Session, criteria: dict) -> List[User]:
-    return repo.find_by(session, criteria)
-
-users = find_users_by_criteria(session, {"name": "John"})
-```
-
-#### With `@transactional`
-```python
-@transactional(read_only=True)
-def find_users_by_criteria(session: Session, criteria: dict) -> List[User]:
-    return repo.find_by(session, criteria)
-
-users = find_users_by_criteria(session, {"name": "John"})
-```
-
-## Check if User Exists
-The exists_by method checks if at least one entity exists with the specified criteria.
-
-#### Without `@transactional`
-```python
-def check_user_exists(session: Session, email: str) -> bool:
-    return repo.exists_by(session, email=email)
-
-exists = check_user_exists(session, "john@example.com")
-```
-
-#### With `@transactional`
-```python
-@transactional(read_only=True)
-def check_user_exists(session: Session, email: str) -> bool:
-    return repo.exists_by(session, email=email)
-
-exists = check_user_exists(session, "john@example.com")
-```
-
-## Find First User
-The  find_first method retrieves the first entity ordered by a specific field.
-
-#### Without `@transactional`
-```python
-def find_first_user(session: Session) -> User:
-    return repo.find_first(session)
-
-first_user = find_first_user(session)
-```
-
-#### With `@transactional`
-```python
-@transactional(read_only=True)
-def find_first_user(session: Session) -> User:
-    return repo.find_first(session)
-
-first_user = find_first_user(session)
-```
-
-## Find Latest User
-The find_latest method retrieves the most recent entity ordered by a specific field.
-
-#### Without `@transactional`
-```python
-def find_latest_user(session: Session) -> User:
-    return repo.find_latest(session)
-
-latest_user = find_latest_user(session)
-```
-
-#### With `@transactional`
-```python
-@transactional(read_only=True)
-def find_latest_user(session: Session) -> User:
-    return repo.find_latest(session)
-
-latest_user = find_latest_user(session)
-```
-
-### Detailed Explanation
-
-The FindOperations class includes the following methods:
-
-- **find_by_id**: Retrieves an entity by its ID.
-- **find_all**: Retrieves all entities from the database.
-- **find_by**: Retrieves entities based on specified criteria.
-- **exists_by**: Checks if at least one entity exists with the specified criteria.
-- **find_first**: Retrieves the first entity ordered by a specific field.
-- **find_latest**: Retrieves the most recent entity ordered by a specific field.
-
-#### Example with Detailed Find Operations
-
-```python
-from sqlmodel import SQLModel, Field, Session, create_engine
-from base_repository.core.base_repository import BaseRepository
-from base_repository.decorator.repository import repository
-from base_repository.decorator.transactional import transactional
-
-class User(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    name: str
-    email: str
-
-@repository
 class UserRepository(BaseRepository[User]):
-    pass
+    def __init__(self, session: Session = Depends(get_session)):
+        super().__init__(User, session)
 
-# Setup database
-engine = create_engine("sqlite:///database.db")
-session = Session(engine)
+    # Find with conditions
+    @query("""
+        SELECT u.* FROM users u
+        WHERE u.status = :status 
+        AND u.created_at >= :since_date
+    """)
+    def find_recent_active_users(
+        self, 
+        status: str = "active",
+        since_date: datetime
+    ) -> List[User]:
+        pass
 
-repo = UserRepository()
+    # Complex date range queries
+    def find_users_registered_between(
+        self,
+        start_date: datetime,
+        end_date: datetime
+    ) -> List[User]:
+        return self.find_by_date_between(
+            "created_at",
+            start_date=start_date,
+            end_date=end_date
+        )
 
-# Find user by ID without @transactional
-def find_user_by_id(session: Session, user_id: int) -> User:
-    return repo.find_by_id(session, user_id)
-
-user = find_user_by_id(session, 1)
-
-# Find user by ID with @transactional
-@transactional(read_only=True)
-def find_user_by_id(session: Session, user_id: int) -> User:
-    return repo.find_by_id(session, user_id)
-
-user = find_user_by_id(session, 1)
-
-# Find all users without @transactional
-def find_all_users(session: Session) -> List[User]:
-    return repo.find_all(session)
-
-users = find_all_users(session)
-
-# Find all users with @transactional
-@transactional(read_only=True)
-def find_all_users(session: Session) -> List[User]:
-    return repo.find_all(session)
-
-users = find_all_users(session)
-
-# Find users by criteria without @transactional
-def find_users_by_criteria(session: Session, criteria: dict) -> List[User]:
-    return repo.find_by(session, criteria)
-
-users = find_users_by_criteria(session, {"name": "John"})
-
-# Find users by criteria with @transactional
-@transactional(read_only=True)
-def find_users_by_criteria(session: Session, criteria: dict) -> List[User]:
-    return repo.find_by(session, criteria)
-
-users = find_users_by_criteria(session, {"name": "John"})
-
-# Check if user exists without @transactional
-def check_user_exists(session: Session, email: str) -> bool:
-    return repo.exists_by(session, email=email)
-
-exists = check_user_exists(session, "john@example.com")
-
-# Check if user exists with @transactional
-@transactional(read_only=True)
-def check_user_exists(session: Session, email: str) -> bool:
-    return repo.exists_by(session, email=email)
-
-exists = check_user_exists(session, "john@example.com")
-
-# Find first user without @transactional
-def find_first_user(session: Session) -> User:
-    return repo.find_first(session)
-
-first_user = find_first_user(session)
-
-# Find first user with @transactional
-@transactional(read_only=True)
-def find_first_user(session: Session) -> User:
-    return repo.find_first(session)
-
-first_user = find_first_user(session)
-
-# Find latest user without @transactional
-def find_latest_user(session: Session) -> User:
-    return repo.find_latest(session)
-
-latest_user = find_latest_user(session)
-
-# Find latest user with @transactional
-@transactional(read_only=True)
-def find_latest_user(session: Session) -> User:
-    return repo.find_latest(session)
-
-latest_user = find_latest_user(session)
+    # Pattern matching with automatic session management
+    def find_users_by_name_pattern(self, pattern: str) -> List[User]:
+        return self.find_by_like("name", pattern)
 ```
 
+3. **Smart Pagination with FastAPI**
 
-# Pageable Operations 📄
-The PageableOperations class provides methods to retrieve entities from the database with pagination, sorting, and filtering support. This class supports SQLModel models.
-
-## Get Paginated Users
-The get_page method retrieves a paginated list of entities from the database.
-
-#### Without `@transactional`
 ```python
-from base_repository.repository.pageable.page import Page, PageInfo
+from fastapi import Query
 
-def get_paginated_users(session: Session, page: int = 1, size: int = 10) -> Page[dict]:
-    return repo.get_page(session, page=page, size=size, order_by="name", sort_order="asc")
+class UserController:
+    @router.get("/users", response_model=Page[UserResponse])
+    async def get_users(
+        self,
+        page: int = Query(1, ge=1),
+        size: int = Query(10, ge=1, le=100),
+        order_by: str = Query("created_at"),
+        service: UserService = Depends()
+    ):
+        return await service.get_users_page(
+            page=page,
+            size=size,
+            order_by=order_by
+        )
 
-page = get_paginated_users(session, page=1, size=10)
+class UserService:
+    def __init__(self, repo: UserRepository = Depends()):
+        self.repo = repo
+
+    @transactional(read_only=True)
+    async def get_users_page(
+        self,
+        page: int,
+        size: int,
+        order_by: str
+    ) -> Page[User]:
+        return self.repo.get_page(
+            page=page,
+            size=size,
+            order_by=order_by,
+            sort_order="desc"
+        )
 ```
 
-#### With `@transactional`
+## Advanced Features 🔥
+
+### 1. Transaction Management with FastAPI
+
 ```python
-from base_repository.decorator.transactional import transactional
+from fastapi import Depends, HTTPException
+from base_repository import transactional
 
-@transactional(read_only=True)
-def get_paginated_users(session: Session, page: int = 1, size: int = 10) -> Page[dict]:
-    return repo.get_page(session, page=page, size=size, order_by="name", sort_order="asc")
+class OrderService:
+    def __init__(
+        self,
+        order_repo: OrderRepository = Depends(),
+        product_repo: ProductRepository = Depends(),
+        user_repo: UserRepository = Depends()
+    ):
+        self.order_repo = order_repo
+        self.product_repo = product_repo
+        self.user_repo = user_repo
 
-page = get_paginated_users(session, page=1, size=10)
+    @transactional  # Automatic transaction management
+    async def create_order(self, order_data: OrderCreate) -> Order:
+        # All operations are wrapped in a transaction
+        user = self.user_repo.get_by_id(order_data.user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        product = self.product_repo.get_by_id(order_data.product_id)
+        if not product or product.stock < order_data.quantity:
+            raise HTTPException(status_code=400, detail="Product unavailable")
+
+        # Update product stock
+        product.stock -= order_data.quantity
+        self.product_repo.save(product)
+
+        # Create order
+        order = Order(**order_data.dict())
+        return self.order_repo.save(order)
+
+    @transactional(read_only=True)  # Optimized for reads
+    async def get_order_details(self, order_id: int) -> OrderDetails:
+        return self.order_repo.get_details(order_id)
+
+    @transactional(auto_concurrent=True)  # Handles concurrent access
+    async def update_order_status(
+        self,
+        order_id: int,
+        status: str
+    ) -> Order:
+        order = self.order_repo.get_by_id(order_id)
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        order.status = status
+        return self.order_repo.save(order)
 ```
 
-## Find Paginated Users by Search Term
+### 2. Complex Queries with FastAPI Integration
 
-The find_page method retrieves a paginated list of entities from the database based on a search term.
-
-#### Without `@transactional`
 ```python
-def find_paginated_users(session: Session, search_term: str, search_fields: List[str], page: int = 1, size: int = 10) -> Page[dict]:
-    return repo.find_page(session, search_term=search_term, search_fields=search_fields, page=page, size=size)
+from fastapi import Depends
+from sqlmodel import Session
+from base_repository import query
 
-page = find_paginated_users(session, search_term="john", search_fields=["name", "email"], page=1, size=10)
+class ProductRepository(BaseRepository[Product]):
+    def __init__(self, session: Session = Depends(get_session)):
+        super().__init__(Product, session)
+
+    @query("""
+        WITH RankedProducts AS (
+            SELECT 
+                p.*,
+                AVG(r.rating) as avg_rating,
+                COUNT(r.id) as review_count,
+                ROW_NUMBER() OVER (
+                    PARTITION BY p.category_id 
+                    ORDER BY AVG(r.rating) DESC
+                ) as rank
+            FROM products p
+            LEFT JOIN reviews r ON p.id = r.product_id
+            WHERE p.price BETWEEN :min_price AND :max_price
+            GROUP BY p.id
+            HAVING COUNT(r.id) >= :min_reviews
+        )
+        SELECT * FROM RankedProducts
+        WHERE rank <= :top_n
+    """)
+    def find_top_rated_by_category(
+        self,
+        min_price: Decimal,
+        max_price: Decimal,
+        min_reviews: int = 5,
+        top_n: int = 3
+    ) -> List[Product]:
+        pass
+
+    @query("""
+        SELECT 
+            p.*,
+            SUM(o.quantity) as total_sold
+        FROM products p
+        JOIN orders o ON p.id = o.product_id
+        WHERE o.created_at >= :since_date
+        GROUP BY p.id
+        HAVING total_sold >= :min_sales
+    """, scalar=False)
+    def find_best_sellers(
+        self,
+        since_date: datetime,
+        min_sales: int = 100
+    ) -> List[Product]:
+        pass
 ```
 
-#### With `@transactional`
-```python
-@transactional(read_only=True)
-def find_paginated_users(session: Session, search_term: str, search_fields: List[str], page: int = 1, size: int = 10) -> Page[dict]:
-    return repo.find_page(session, search_term=search_term, search_fields=search_fields, page=page, size=size)
+### 3. Stored Procedures with Different Databases
 
-page = find_paginated_users(session, search_term="john", search_fields=["name", "email"], page=1, size=10)
+```python
+class OrderRepository(BaseRepository[Order]):
+    def __init__(self, session: Session = Depends(get_session)):
+        super().__init__(Order, session)
+
+    @store_procedure(
+        name="sp_process_payment",
+        db_type=DatabaseType.POSTGRESQL
+    )
+    def process_payment(
+        self,
+        order_id: int,
+        amount: Decimal,
+        payment_method: str
+    ) -> PaymentResult:
+        pass
+
+    @store_procedure(
+        name="sp_calculate_shipping",
+        db_type=DatabaseType.MYSQL,
+        scalar=True
+    )
+    def calculate_shipping_cost(
+        self,
+        order_id: int,
+        destination: str
+    ) -> Decimal:
+        pass
+
+    @store_procedure(
+        name="sp_update_inventory",
+        db_type=DatabaseType.SQLSERVER
+    )
+    def update_inventory(
+        self,
+        product_id: int,
+        quantity: int,
+        operation: Literal["add", "subtract"]
+    ) -> InventoryResult:
+        pass
 ```
 
-### Exception Handling 🚨
-The PageableOperations class handles various exceptions:
+## API Reference 📖
 
-- `EntityNotFoundError`: Raised when an entity is not found.
-- `SQLAlchemyError`: Raised for general database errors.
 
-#### Example with Error Handling
+Here is the updated documentation with the complete table for Basic Operations:
 
+### Basic Operations
+| Method             | Description                  | Example                                                              |
+|--------------------|------------------------------|----------------------------------------------------------------------|
+| `save`             | Create or update entity      | `repo.save(entity)`                                                  |
+| `get_all`          | List all entities            | `repo.get_all(where={"status": "active"}, order_by="created_at")`     |
+| `get_by_id`        | Find by primary key          | `repo.get_by_id(1)`                                                  |
+| `update`           | Update entity by ID          | `repo.update(1, updated_entity)`                                      |
+| `delete`           | Remove entity                | `repo.delete(1)`                                                     |
+
+### Detailed Examples of Basic Operations:
+The `BasicOperations` class provides essential CRUD (Create, Read, Update, Delete) operations for managing entities in your database. These operations include saving entities, retrieving all entities with optional filtering and sorting, finding entities by their primary key, updating entities, and deleting entities. Below is a table summarizing these operations, followed by detailed examples.
+
+**Save Operation**
 ```python
-from base_repository.exception.base_repository_exception import EntityNotFoundError
+# Create or update entity
+repo = UserRepository(session)
+new_user = User(name="John Doe", email="john.doe@example.com")
+saved_user = repo.save(new_user)
+print(saved_user.id)  # Outputs the ID of the saved user
+```
 
-try:
-    user = repo.get_by_id(session, 1)
-except EntityNotFoundError:
+**Get All Operation**
+```python
+# List all entities with optional filters and sorting
+repo = UserRepository(session)
+users = repo.get_all(
+    where={"status": "active"},
+    order_by="created_at",
+    sort_order="desc"
+)
+for user in users:
+    print(user.name)
+```
+**Get by ID Operation**
+```python
+# Find entity by primary key
+repo = UserRepository(session)
+user = repo.get_by_id(1)
+if user:
+    print(user.name)
+else:
     print("User not found")
-except SQLAlchemyError as e:
-    print(f"Database error: {e}")
 ```
 
-### Detailed Explanation
-
-The PageableOperations class includes the following methods:
-
-- **get_page**: Retrieves a paginated list of entities from the database.
-- **find_page**: Retrieves a paginated list of entities from the database based on a search term.
-
-#### Example with Detailed Pageable Operations
-
+**Update Operation**
 ```python
-from sqlmodel import SQLModel, Field, Session, create_engine
-from base_repository.core.base_repository import BaseRepository
-from base_repository.decorator.repository import repository
-from base_repository.decorator.transactional import transactional
-from base_repository.repository.pageable.page import Page, PageInfo
-
-class User(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    name: str
-    email: str
-
-@repository
-class UserRepository(BaseRepository[User]):
-    pass
-
-# Setup database
-engine = create_engine("sqlite:///database.db")
-session = Session(engine)
-
-repo = UserRepository()
-
-# Get paginated users without @transactional
-def get_paginated_users(session: Session, page: int = 1, size: int = 10) -> Page[dict]:
-    return repo.get_page(session, page=page, size=size, order_by="name", sort_order="asc")
-
-page = get_paginated_users(session, page=1, size=10)
-
-# Get paginated users with @transactional
-@transactional(read_only=True)
-def get_paginated_users(session: Session, page: int = 1, size: int = 10) -> Page[dict]:
-    return repo.get_page(session, page=page, size=size, order_by="name", sort_order="asc")
-
-page = get_paginated_users(session, page=1, size=10)
-
-# Find paginated users by search term without @transactional
-def find_paginated_users(session: Session, search_term: str, search_fields: List[str], page: int = 1, size: int = 10) -> Page[dict]:
-    return repo.find_page(session, search_term=search_term, search_fields=search_fields, page=page, size=size)
-
-page = find_paginated_users(session, search_term="john", search_fields=["name", "email"], page=1, size=10)
-
-# Find paginated users by search term with @transactional
-@transactional(read_only=True)
-def find_paginated_users(session: Session, search_term: str, search_fields: List[str], page: int = 1, size: int = 10) -> Page[dict]:
-    return repo.find_page(session, search_term=search_term, search_fields=search_fields, page=page, size=size)
-
-page = find_paginated_users(session, search_term="john", search_fields=["name", "email"], page=1, size=10)
+# Update entity by ID
+repo = UserRepository(session)
+updated_user = User(name="Jane Doe")
+updated_entity = repo.update(1, updated_user)
+print(updated_entity.name)  # Outputs "Jane Doe"
 ```
 
-### Error Handling
-
-The PageableOperationsclass handles various exceptions:
-
-- `EntityNotFoundError`: Raised when an entity is not found.
-- `SQLAlchemyError`: Raised for general database errors.
-
-#### Example with Error Handling
-
+**Delete Operation**
 ```python
-from base_repository.exception.base_repository_exception import EntityNotFoundError
+# Remove entity by ID
+repo = UserRepository(session)
+success = repo.delete(1)
+if success:
+    print("User deleted")
+else:
+    print("User not found or delete failed")
+```
+This should provide a clear understanding of the basic CRUD operations available in the `BasicOperations` class.
 
-try:
-    user = repo.get_by_id(session, 1)
-except EntityNotFoundError:
+
+### Find Operations
+The `FindOperations` class provides various methods to retrieve entities from the database based on different criteria. These operations include finding entities by their primary key, querying with filters, checking for the existence of entities, retrieving entities within a date range, and more. Below is a table summarizing these operations, followed by detailed examples.
+
+| Method                  | Description                   | Example                                                       |
+|-------------------------|-------------------------------|---------------------------------------------------------------|
+| `find_by`               | Query with filters            | `repo.find_by({"status": "active"})`                          |
+| `find_one`              | Get single result             | `repo.find_one({"email": "user@example.com"})`                |
+| `exists_by`             | Check existence               | `repo.exists_by(name="John")`                                 |
+| `find_by_date_between`  | Date range query              | `repo.find_by_date_between("created_at", start, end)`         |
+| `find_by_id`            | Find entity by ID             | `repo.find_by_id(1)`                                          |
+| `find_all`              | Retrieve all entities         | `repo.find_all()`                                             |
+| `find_all_by_id`        | Retrieve entities by IDs      | `repo.find_all_by_id([1, 2, 3])`                              |
+| `find_first`            | Find the first entity         | `repo.find_first(order_by="name")`                            |
+| `find_latest`           | Find the latest entity        | `repo.find_latest(order_by="created_at")`                     |
+| `find_by_like`          | Search using LIKE operator    | `repo.find_by_like(field="name", value="john")`               |
+| `search`                | Search across multiple fields | `repo.search(value="john", fields=["name", "email"])`         |
+
+### Detailed Examples of Find Operations:
+
+**Find by Filters**
+```python
+# Query with filters
+repo = UserRepository(session)
+users = repo.find_by({"status": "active", "age": 25})
+for user in users:
+    print(user.name)
+```
+
+**Find One by Filters**
+```python
+# Get single result by filters
+repo = UserRepository(session)
+user = repo.find_one({"email": "user@example.com"})
+if user:
+    print(user.name)
+else:
     print("User not found")
-except SQLAlchemyError as e:
-    print(f"Database error: {e}")
 ```
-# Note 📝
-The  `@transactional`  decorator is used for write operations to ensure they are executed within a transaction context. For read operations, it is not always necessary to use the  `@transactional`  decorator, especially if the operations are simple and do not require transaction management. However, using  `@transactional(read_only=True)`  can still be beneficial for consistency and to ensure read-only transactions, which can help prevent accidental modifications.
 
-# Acknowledgements 🙏
+**Exists by Filters**
+```python
+# Check if entity exists by field conditions
+repo = UserRepository(session)
+exists = repo.exists_by(email="user@example.com", status="active")
+if exists:
+    print("User exists")
+else:
+    print("User does not exist")
+```
 
-We would like to thank the following for their contributions and support:
+**Find by Date Range**
+```python
+# Find entities between date range
+repo = UserRepository(session)
+users = repo.find_by_date_between(
+    date_field="created_at",
+    start_date="2024-01-01",
+    end_date="2024-12-31"
+)
+for user in users:
+    print(user.name)
+```
 
-- **SQLModel**: For providing a powerful and flexible ORM for SQL databases.
-- **Pydantic**: For enabling data validation and settings management using Python type annotations.
-- **SQLAlchemy**: For being the core SQL toolkit and ORM that powers SQLModel.
-- **FastAPI**: For inspiring the creation of modern, fast (high-performance), web frameworks for building APIs with Python 3.6+ based on standard Python type hints.
+**Find by ID**
+```python
+# Find entity by primary key
+repo = UserRepository(session)
+user = repo.find_by_id(1)
+if user:
+    print(user.name)
+else:
+    print("User not found")
+```
 
-### License 📜
+**Find All**
+```python
+# Retrieve all entities
+repo = UserRepository(session)
+users = repo.find_all()
+for user in users:
+    print(user.name)
+```
 
-This project is licensed under the MIT License. See the LICENSE file for more details.
+**Find All by IDs**
+```python
+# Retrieve entities by a list of IDs
+repo = UserRepository(session)
+users = repo.find_all_by_id([1, 2, 3])
+for user in users:
+    print(user.name)
+```
+
+**Find First**
+```python
+# Find the first entity ordered by a specified field
+repo = UserRepository(session)
+first_user = repo.find_first(order_by="created_at")
+if first_user:
+    print(first_user.name)
+else:
+    print("No users found")
+```
+
+**Find Latest**
+```python
+# Find the latest entity ordered by a specified field
+repo = UserRepository(session)
+latest_user = repo.find_latest(order_by="created_at")
+if latest_user:
+    print(latest_user.name)
+else:
+    print("No users found")
+```
+
+**Find by LIKE Operator**
+```python
+# Search entities by field using LIKE operator
+repo = UserRepository(session)
+users = repo.find_by_like(field="name", value="john")
+for user in users:
+    print(user.email)
+```
+
+**Search Across Multiple Fields**
+```python
+# Search across multiple fields
+repo = UserRepository(session)
+users = repo.search(value="john", fields=["name", "email"])
+for user in users:
+    print(user.name)
+```
+
+This should provide a clear understanding of the various find operations available in the `FindOperations` class.
+
+
+### Pagination
+The `PageableOperations` class provides methods for paginating and searching entities with full IDE support and type checking. These operations include getting paginated results and searching with pagination. Below is a table summarizing these operations, followed by detailed examples.
+
+| Method       | Description            | Example                                          |
+|--------------|------------------------|--------------------------------------------------|
+| `get_page`   | Get paginated results  | `repo.get_page(page=1, size=10)`                 |
+| `find_page`  | Search with pagination | `repo.find_page("john", ["name", "email"])`      |
+
+### Detailed Examples of Pagination Operations:
+
+**Get Paginated Results**
+```python
+# Get paginated results
+repo = UserRepository(session)
+page = repo.get_page(
+    page=1,
+    size=10,
+    order_by="created_at",
+    sort_order="desc"
+)
+
+for item in page.data:
+    print(item["name"])
+
+print(page.pagination.total_pages)  # Outputs the total number of pages
+```
+
+**Search with Pagination**
+```python
+# Search with pagination
+repo = UserRepository(session)
+results = repo.find_page(
+    search_term="john",
+    search_fields=["name", "email"],
+    page=1,
+    size=10,
+    order_by="created_at",
+    sort_order="desc"
+)
+
+for item in results.data:
+    print(item["name"])
+
+print(results.pagination.total_items)  # Outputs the total number of items found
+```
+
+This should provide a clear understanding of the pagination operations available in the `PageableOperations` class.
+
+## Examples & Use Cases 📚
+
+### 1. E-Commerce Product Catalog
+
+```python
+class ProductRepo(BaseRepository[Product]):
+    def __init__(self, session: Session = Depends(get_session)):
+        super().__init__(Product, session)
+
+    @query("""
+        SELECT p.*, avg(r.rating) as avg_rating
+        FROM product p
+        LEFT JOIN review r ON p.id = r.product_id
+        GROUP BY p.id
+        HAVING avg(r.rating) >= :min_rating
+    """)
+    def find_top_rated_products(self, min_rating: float) -> List[Product]:
+        pass
+
+    @transactional(read_only=True)
+    def get_product_catalog(
+        self,
+        category: str = None,
+        min_price: Decimal = None,
+        max_price: Decimal = None,
+        page: int = 1,
+        size: int = 20
+    ) -> Page[Product]:
+        filters = {}
+        if category:
+            filters["category"] = category
+        if min_price:
+            filters["price_gte"] = min_price
+        if max_price:
+            filters["price_lte"] = max_price
+            
+        return self.get_page(
+            page=page,
+            size=size,
+            where=filters,
+            order_by="name",
+            sort_order="asc"
+        )
+```
+
+### 2. User Management System
+
+```python
+class UserRepo(BaseRepository[User]):
+    def __init__(self, session: Session = Depends(get_session)):
+        super().__init__(User, session)
+
+    @store_procedure(
+        name="sp_authenticate_user",
+        db_type=DatabaseType.POSTGRESQL
+    )
+    def authenticate(self, email: str, password_hash: str) -> Optional[User]:
+        pass
+
+    @query("""
+        SELECT u.*, count(p.id) as post_count
+        FROM user u
+        LEFT JOIN post p ON u.id = p.user_id
+        GROUP BY u.id
+        HAVING count(p.id) > :min_posts
+    """)
+    def find_active_creators(self, min_posts: int) -> List[User]:
+        pass
+
+    def find_users_by_role(
+        self,
+        role: str,
+        page: int = 1,
+        size: int = 20
+    ) -> Page[User]:
+        return self.get_page(
+            page=page,
+            size=size,
+            where={"role": role},
+            join_relations=[User.profile],
+            join_type="left",
+            order_by="created_at",
+            sort_order="desc"
+        )
+```
+
+
+## License 📄
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-Thank you for using **Base Repository**! If you have any questions or feedback, please feel free to open an issue on GitHub or contact us directly. Happy coding! 🚀
+> "Clean code always looks like it was written by someone who cares." - Michael Feathers
+
+---
+Made with ❤️ by the Base Repository Team

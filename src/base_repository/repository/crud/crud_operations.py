@@ -1,5 +1,8 @@
 from typing import Literal, TypeVar, Generic, Type, Optional, List, Union
-from base_repository.exception.base_repository_exception import ValidationError, EntityNotFoundError
+from base_repository.exception.base_repository_exception import (
+    ValidationError,
+    EntityNotFoundError,
+)
 from sqlmodel import Session, select
 from sqlmodel import SQLModel
 from sqlalchemy.exc import SQLAlchemyError
@@ -7,126 +10,134 @@ from pydantic import BaseModel
 
 T = TypeVar("T", bound=Union[SQLModel, BaseModel])
 
-class BasicOperations(Generic[T]):
-    """
-    Provides basic CRUD operations for database entities.
-    
-    This class implements common database operations like create, read, update, and delete
-    for SQLModel or Pydantic models.
 
-    Attributes:
-        model_class (Type[T]): The model class type for the entity being managed.
+class BasicOperations(Generic[T]):
+    """Base CRUD operations.
+
+    IDE Features:
+        * Method autocompletion (type '.')
+        * Parameter type hints (Ctrl+Space)
+        * Return type inference
+        * Go to definition (F12)
+        * Documentation on hover
+
+    Available Operations:
+        * save(entity: T) -> T
+        * get_all(where?: dict, order_by?: str) -> List[T]
+        * get_by_id_store_procedure(id: int) -> Optional[T]
+        * update(id: int, entity: T) -> T
+        * delete(id: int) -> bool
 
     Example:
         ```python
-        class User(SQLModel):
-            id: int
-            name: str
+        class UserRepo(BasicOperations[User]):
+            def __init__(self, session: Session):
+                super().__init__(User, session)
 
-        user_ops = BasicOperations[User](User)
-        user = User(name="John")
-        saved_user = user_ops.save(session, user)
+        # IDE Support:
+        repo = UserRepo(session)
+        repo.  # Shows all available methods
+        user = repo.save(  # Shows User type hint
+        users = repo.get_all(  # Shows dict parameter hints
+        found = repo.get_by_id_store_procedure(  # Shows int parameter
         ```
 
-    Raises:
-        ValidationError: If model_class is not a valid SQLModel or BaseModel type.
+    Type Support:
+        * T = Your model type (SQLModel/BaseModel)
+        * Full type checking for parameters
+        * Return type inference
+        * Generic type validation
     """
 
-    def __init__(self, model_class: Type[T]):
-        """
-        Initialize BasicOperations with a model class.
+    def __init__(self, model_class: Type[T], session: Session = None):
+        """Initialize CRUD operations with model type checking.
+
+        IDE Support:
+            * Type hints for parameters
+            * Validation checking
+            * Session initialization
 
         Args:
-            model_class (Type[T]): The model class to operate on. Must be SQLModel or BaseModel.
-
-        Raises:
-            ValidationError: If model_class is not a valid model type.
+            model_class: Your model class (User, Product, etc)
+            session: Database session
         """
         if not issubclass(model_class, (SQLModel, BaseModel)):
             raise ValidationError("model_class must be SQLModel or BaseModel")
         self.model_class = model_class
+        self.session = session
 
-    def save(self, session: Session, entity: T) -> T:
-        """
-        Save a new entity to the database.
+    def save(self, entity: T) -> T:
+        """Save entity to database.
 
         Args:
-            session (Session): Active database session.
-            entity (T): Entity instance to save.
+            entity (T): Entity to save (e.g. User, Product)
+                    Type hints show available fields
 
         Returns:
-            T: The saved entity.
+            T: Saved entity with updated ID
+
+        Example:
+            ```python
+            repo = UserRepository(session)
+            user = User(name="John")
+            saved = repo.save(user)
+            print(saved.id)
+            ```
 
         Raises:
-            ValidationError: If session or entity is invalid.
-            SQLAlchemyError: If database operation fails.
+            ValidationError: If session not initialized or invalid entity type
+            SQLAlchemyError: If database operation fails
         """
-        if not isinstance(session, Session):
-            raise ValidationError("Valid session required")
+        if not self.session:
+            raise ValidationError("Session not initialized")
         if not isinstance(entity, self.model_class):
             raise ValidationError(f"Entity must be of type {self.model_class.__name__}")
         try:
-            session.add(entity)
-            session.flush()
+            self.session.add(entity)
+            self.session.flush()
             return entity
         except SQLAlchemyError:
             raise
 
     def get_all(
-        self, 
-        session: Session, 
+        self,
         where: Optional[dict] = None,
         order_by: Optional[str] = None,
-        sort_order: Literal["asc", "desc"] = "asc"
+        sort_order: Literal["asc", "desc"] = "asc",
     ) -> List[T]:
-        """
-        Retrieve all entities with optional filtering and ordering.
-
-        This method allows querying entities with complex filtering and ordering options.
-        Filters are applied as exact matches on entity fields.
+        """Retrieve all entities with filtering and sorting support.
 
         Args:
-            session (Session): Active database session for the query.
-            where (Optional[dict]): Dictionary of filter conditions where keys are field 
-                names and values are the matching values. Example: {"status": "active"}.
-            order_by (Optional[str]): Name of the field to order results by.
-                Must be a valid field name of the entity.
-            sort_order (Literal["asc", "desc"]): Sort direction, either ascending ("asc") 
-                or descending ("desc"). Defaults to "asc".
+            where: Filter conditions {field: value}
+            order_by: Field name for sorting
+            sort_order: Sort direction ('asc' or 'desc')
 
         Returns:
-            List[T]: List of entities matching the specified criteria.
+            List[T]: List of entities matching criteria
+
+        Example:
+            ```python
+            repo = UserRepository(session)
+            # IDE shows field suggestions:
+            users = repo.get_all(
+                where={"status": "active"},
+                order_by="created_at",
+                sort_order="desc"
+            )
+            ```
 
         Raises:
-            ValidationError: If any of these conditions occur:
-                - Invalid session provided
-                - Invalid sort_order value
-                - Invalid field name in where dictionary
-                - Invalid order_by field name
-            SQLAlchemyError: For any database-related errors
-
-        Examples:
-            ```python
-            # Get all active users sorted by name
-            users = crud.get_all(
-                session,
-                where={"status": "active"},
-                order_by="name",
-                sort_order="asc"
-            )
-
-            # Get all records without filtering
-            all_records = crud.get_all(session)
-            ```
+            ValidationError: If invalid fields or sort order
+            SQLAlchemyError: If database operation fails
         """
-        if not isinstance(session, Session):
-            raise ValidationError("Valid database session required")
+        if not self.session:
+            raise ValidationError("Session not initialized")
         if sort_order not in ["asc", "desc"]:
             raise ValidationError("sort_order must be either 'asc' or 'desc'")
 
         try:
             statement = select(self.model_class)
-            
+
             if where:
                 filters = []
                 for field, value in where.items():
@@ -136,177 +147,131 @@ class BasicOperations(Generic[T]):
                     filters.append(column == value)
                 if filters:
                     statement = statement.where(*filters)
-            
+
             if order_by:
                 if not hasattr(self.model_class, order_by):
                     raise ValidationError(f"Invalid order_by field: {order_by}")
                 order_column = getattr(self.model_class, order_by)
                 statement = statement.order_by(
-                    order_column.desc() if sort_order == "desc" 
-                    else order_column.asc()
+                    order_column.desc() if sort_order == "desc" else order_column.asc()
                 )
-                    
-            return session.exec(statement).all()
+
+            return self.session.exec(statement).all()
         except SQLAlchemyError:
             raise
-    
-    
-    def get_by_id(self, session: Session, id: int) -> Optional[T]:
-        """
-        Retrieve an entity by its ID from the database.
 
-        This method performs a direct lookup by primary key and returns the entity
-        if found. It includes validation for session and ID parameters.
+    def get_by_id(self, id: int) -> Optional[T]:
+        """Retrieve entity by ID.
 
         Args:
-            session (Session): Active database session for the query.
-            id (int): Primary key ID of the entity to retrieve.
+            id (int): Primary key of entity to retrieve
 
         Returns:
-            Optional[T]: The found entity instance or None if not found.
+            Optional[T]: Found entity or None
+
+        Example:
+            ```python
+            repo = UserRepository(session)
+            user = repo.get_by_id(1)
+            if user:
+                print(user.name)
 
         Raises:
-            ValidationError: If any of these conditions occur:
-                - Invalid session provided
-                - ID is not an integer
-            EntityNotFoundError: If no entity exists with the given ID
-            SQLAlchemyError: For any database-related errors
-
-        Examples:
-            ```python
-            # Get user by ID
-            try:
-                user = crud.get_by_id(session, 123)
-                print(f"Found user: {user.name}")
-            except EntityNotFoundError:
-                print("User not found")
-            
-            # Handle validation error
-            try:
-                user = crud.get_by_id(session, "invalid_id")  # Will raise ValidationError
-            except ValidationError as e:
-                print(f"Invalid input: {e}")
-            ```
+            ValidationError: If invalid ID type or session not initialized
+            EntityNotFoundError: If no entity found with given ID
+            SQLAlchemyError: If database operation fails
         """
-        if not isinstance(session, Session):
-            raise ValidationError("Valid database session required")
+        if not self.session:
+            raise ValidationError("Session not initialized")
         if not isinstance(id, int):
             raise ValidationError("ID must be an integer")
-            
+
         try:
-            entity = session.get(self.model_class, id)
+            entity = self.session.get(self.model_class, id)
             if not entity:
                 raise EntityNotFoundError(f"Entity not found with ID: {id}")
             return entity
         except SQLAlchemyError:
             raise
 
-
-    def update(self, session: Session, id: int, entity: T) -> T:
-        """
-        Update an existing entity in the database.
-
-        This method updates an entity by its ID with new data. It performs validations
-        and ensures all fields being updated are valid for the entity type.
+    def update(self, id: int, entity: T) -> T:
+        """Update entity by ID.
 
         Args:
-            session (Session): Active database session for the operation.
-            id (int): Primary key ID of the entity to update.
-            entity (T): Entity instance with updated data.
+            id (int): Primary key of entity to update
+            entity (T): Entity with updated values
 
         Returns:
-            T: The updated entity instance.
+            T: Updated entity with all changes
 
-        Raises:
-            ValidationError: If any of these conditions occur:
-                - Invalid session provided
-                - Invalid entity type
-                - Invalid field in update data
-            EntityNotFoundError: If no entity exists with the given ID
-            SQLAlchemyError: For any database-related errors
-
-        Examples:
+        Example:
             ```python
-            # Update user name
-            try:
-                updated_user = User(name="New Name")
-                result = crud.update(session, 123, updated_user)
-                print(f"Updated user: {result.name}")
-            except EntityNotFoundError:
-                print("User not found")
-            except ValidationError as e:
-                print(f"Invalid update data: {e}")
+            repo = UserRepository(session)
+            user = User(name="Updated")
+            updated = repo.update(1, user)
+            print(updated.name)
             ```
+        Raises:
+            ValidationError: If invalid ID/entity or session not initialized
+            EntityNotFoundError: If no entity found with given ID
+            SQLAlchemyError: If database operation fails
         """
-        if not isinstance(session, Session):
-            raise ValidationError("Valid database session required")
+        if not self.session:
+            raise ValidationError("Session not initialized")
         if not isinstance(id, int):
             raise ValidationError("ID must be an integer")
         if not isinstance(entity, self.model_class):
             raise ValidationError(f"Entity must be of type {self.model_class.__name__}")
-            
+
         try:
-            db_entity = session.get(self.model_class, id)
+            db_entity = self.session.get(self.model_class, id)
             if not db_entity:
                 raise EntityNotFoundError(f"Entity not found with ID: {id}")
-            
+
             for key, value in entity.model_dump(exclude_unset=True).items():
                 if not hasattr(db_entity, key):
                     raise ValidationError(f"Invalid field: {key}")
                 setattr(db_entity, key, value)
-            
-            session.add(db_entity)
-            session.flush()
+
+            self.session.add(db_entity)
+            self.session.flush()
             return db_entity
         except SQLAlchemyError:
             raise
 
-
-    def delete(self, session: Session, id: int) -> bool:
-        """
-        Delete an entity from the database by its ID.
-
-        This method attempts to delete an entity with the specified ID from the database.
-        It performs validation checks on the input parameters and ensures the entity exists
-        before deletion.
+    def delete(self, id: int) -> bool:
+        """Delete entity by ID with IDE support.
 
         Args:
-            session (Session): Active database session for the deletion operation.
-            id (int): Primary key ID of the entity to delete.
+            id (int): Primary key of entity to delete
 
         Returns:
-            bool: True if the entity was successfully deleted.
+            bool: True if entity was deleted successfully
+
+        Example:
+            ```python
+            repo = UserRepository(session)
+            success = repo.delete(1)
+            if success:
+                print("User deleted")
+            ```
 
         Raises:
-            ValidationError: If any of these conditions occur:
-                - Invalid session provided
-                - ID is not an integer
-            EntityNotFoundError: If no entity exists with the given ID
-            SQLAlchemyError: For any database-related errors
-
-        Examples:
-            ```python
-            # Delete a user
-            try:
-                was_deleted = crud.delete(session, 123)
-                print("User deleted successfully")
-            except EntityNotFoundError:
-                print("User not found")
-            except ValidationError as e:
-                print(f"Invalid input: {e}")
-            ```
+            ValidationError: If invalid ID type or session not initialized
+            EntityNotFoundError: If no entity found with given ID
+            SQLAlchemyError: If database operation fails
         """
-        if not isinstance(session, Session):
-            raise ValidationError("Valid database session required")
+        if not self.session:
+            raise ValidationError("Session not initialized")
         if not isinstance(id, int):
             raise ValidationError("ID must be an integer")
-            
+
         try:
-            entity = session.get(self.model_class, id)
+            entity = self.session.get(self.model_class, id)
             if not entity:
                 raise EntityNotFoundError(f"Entity not found with ID: {id}")
-            
-            session.delete(entity)
+
+            self.session.delete(entity)
             return True
         except SQLAlchemyError:
             raise
